@@ -1,80 +1,127 @@
 # podcast-cli
 
-A Rust CLI for Podcast Index API with agent-friendly JSON output and human-readable table output.
+Rust CLI for [Podcast Index API](https://podcastindex-org.github.io/docs-api/), supporting:
 
-## Requirements
+- `table` output for human reading
+- `json` output for scripts/AI agents
+
+## Prerequisites
 
 - Rust toolchain (`cargo`)
-- Podcast Index API credentials (`api_key`, `api_secret`)
+- Podcast Index credentials: `api_key` and `api_secret`
 
-## Build
+## Install
+
+1. Build locally:
 
 ```bash
-cargo build
+cargo build --release
 ```
 
-## Configure Credentials
+2. Install to `~/.cargo/bin`:
 
 ```bash
-cargo run -- config set \
+cargo install --path . --force
+```
+
+3. Ensure PATH contains cargo bin:
+
+```bash
+echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+4. Verify:
+
+```bash
+podcast-cli --version
+podcast-cli --help
+```
+
+## Configure API Credentials
+
+```bash
+podcast-cli config set \
   --api-key "<your_api_key>" \
   --api-secret "<your_api_secret>" \
   --default-output table \
   --max-results 10
 ```
 
-Show current config:
+Check config:
 
 ```bash
-cargo run -- config show
+podcast-cli config show
 ```
 
-## Commands
-
-### Search and Details
+## Quick Start
 
 ```bash
-cargo run -- search "rust" --limit 5 --output table
-cargo run -- show 920666
-cargo run -- show --url https://example.com/feed.xml --output json
+podcast-cli search "rust" --limit 5
+podcast-cli show 920666
+podcast-cli episodes 920666 --limit 10
+podcast-cli trending --limit 5
+podcast-cli stats
 ```
 
-### Episodes and Trending
+## Command Reference
 
-```bash
-cargo run -- episodes 920666 --limit 10
-cargo run -- episode 123456 --output json
-cargo run -- trending --limit 20
-cargo run -- trending --episodes --lang en --output json
-```
-
-### Advanced (Phase 3)
-
-```bash
-# Latest episodes
-cargo run -- recent --limit 10
-
-# Latest feeds since timestamp
-cargo run -- recent --feeds --since 1700000000 --output json
-
-# Episodes before timestamp
-cargo run -- recent --before 1700000000 --limit 20
-
-# Categories list
-cargo run -- categories
-cargo run -- categories --output json
-
-# Platform stats
-cargo run -- stats
-cargo run -- stats --output json
-```
+| Command | Description | Common Options |
+|---|---|---|
+| `search <term>` | Search podcasts | `--person` `--music` `--limit` `--output` |
+| `show <feed-id>` | Show podcast details by id | `--url` `--output` |
+| `episodes <feed-id>` | List episodes under a feed | `--limit` `--output` |
+| `episode <episode-id>` | Show episode details | `--output` |
+| `trending` | Trending podcasts | `--episodes` `--lang` `--limit` `--output` |
+| `recent` | Recent updates | `--feeds` `--before` `--since` `--limit` `--output` |
+| `categories` | Category list | `--output` |
+| `stats` | Platform metrics | `--output` |
+| `config set/show/clear` | Manage local config | `--api-key` `--api-secret` `--default-output` `--max-results` |
 
 ## Output Modes
 
-- `--output table`: default, compact human-readable output
-- `--output json`: structured output for scripts and AI agents
+- `--output table`: default, concise table output
+- `--output json`: machine-readable output
 
-## Validation Notes
+## Examples
 
-- `--limit` must be in range `1..=100`
-- `recent --before` and `recent --since` require integer Unix timestamps
+```bash
+# Recent episodes
+podcast-cli recent --limit 10
+
+# Recent feeds since Unix timestamp
+podcast-cli recent --feeds --since 1700000000 --output json
+
+# Categories in JSON
+podcast-cli categories --output json
+
+# Stats in JSON
+podcast-cli stats --output json
+```
+
+## Validation Rules
+
+- `--limit` range: `1..=100`
+- `recent --before` and `recent --since` must be integer Unix timestamps
+
+## Troubleshooting
+
+1. `command not found: podcast-cli`
+
+```bash
+source ~/.zshrc
+echo $PATH | tr ':' '\n' | rg '.cargo/bin'
+```
+
+2. `Configuration error: api_key is not configured`
+
+```bash
+podcast-cli config show
+podcast-cli config set --api-key "<key>" --api-secret "<secret>"
+```
+
+3. Network/API timeout or DNS issue
+
+```bash
+curl -4 -v --connect-timeout 10 https://api.podcastindex.org
+```
