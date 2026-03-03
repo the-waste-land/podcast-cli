@@ -2,6 +2,8 @@ use crate::api::client::PodcastIndexClient;
 use crate::api::types::{EpisodeResponse, EpisodesResponse, TrendingEpisodesResponse};
 use crate::error::{PodcastCliError, Result};
 
+const TRENDING_EPISODES_PATH: &str = "/episodes/trending";
+
 pub async fn get_episodes_by_feed_id(
     client: &PodcastIndexClient,
     feed_id: u64,
@@ -33,7 +35,7 @@ pub async fn get_trending_episodes(
         query.push(("lang", lang.to_string()));
     }
 
-    client.get_json("/episodes/trending", &query).await
+    client.get_json(TRENDING_EPISODES_PATH, &query).await
 }
 
 fn validate_max(max: u32) -> Result<()> {
@@ -43,5 +45,13 @@ fn validate_max(max: u32) -> Result<()> {
         Err(PodcastCliError::Validation(
             "limit must be in range 1..=100".to_string(),
         ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn trending_episodes_endpoint_matches_api_route() {
+        assert_eq!(super::TRENDING_EPISODES_PATH, "/episodes/trending");
     }
 }
