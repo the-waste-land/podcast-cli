@@ -13,6 +13,9 @@ pub struct Cli {
 pub enum Commands {
     Search(SearchArgs),
     Show(ShowArgs),
+    Episodes(EpisodesArgs),
+    Episode(EpisodeArgs),
+    Trending(TrendingArgs),
     Config(ConfigArgs),
 }
 
@@ -67,6 +70,36 @@ pub struct ConfigArgs {
     pub command: ConfigSubcommand,
 }
 
+#[derive(Debug, Args)]
+pub struct EpisodesArgs {
+    #[arg(value_name = "feed-id", value_parser = parse_feed_id)]
+    pub feed_id: u64,
+    #[arg(long, value_name = "n")]
+    pub limit: Option<u32>,
+    #[arg(long, value_enum)]
+    pub output: Option<OutputArg>,
+}
+
+#[derive(Debug, Args)]
+pub struct EpisodeArgs {
+    #[arg(value_name = "episode-id", value_parser = parse_episode_id)]
+    pub episode_id: u64,
+    #[arg(long, value_enum)]
+    pub output: Option<OutputArg>,
+}
+
+#[derive(Debug, Args)]
+pub struct TrendingArgs {
+    #[arg(long, help = "Use /episodes/trending endpoint")]
+    pub episodes: bool,
+    #[arg(long, value_name = "code")]
+    pub lang: Option<String>,
+    #[arg(long, value_name = "n")]
+    pub limit: Option<u32>,
+    #[arg(long, value_enum)]
+    pub output: Option<OutputArg>,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum ConfigSubcommand {
     Set(ConfigSetArgs),
@@ -84,4 +117,16 @@ pub struct ConfigSetArgs {
     pub default_output: Option<OutputArg>,
     #[arg(long)]
     pub max_results: Option<u32>,
+}
+
+fn parse_feed_id(value: &str) -> std::result::Result<u64, String> {
+    value
+        .parse::<u64>()
+        .map_err(|_| "feed-id must be an integer".to_string())
+}
+
+fn parse_episode_id(value: &str) -> std::result::Result<u64, String> {
+    value
+        .parse::<u64>()
+        .map_err(|_| "episode-id must be an integer".to_string())
 }
