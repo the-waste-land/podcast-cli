@@ -93,6 +93,78 @@ pub struct TrendingEpisodesResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RecentEpisodesResponse {
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub count: u32,
+    #[serde(default, alias = "episodes")]
+    pub items: Vec<Episode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RecentFeedsResponse {
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub count: u32,
+    #[serde(default, alias = "items")]
+    pub feeds: Vec<Podcast>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct CategoriesResponse {
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub count: u32,
+    #[serde(default, rename = "feedCount")]
+    pub feed_count: Option<u64>,
+    #[serde(default, alias = "feeds")]
+    pub categories: Vec<Category>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Category {
+    #[serde(default)]
+    pub id: Option<u64>,
+    #[serde(default)]
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct StatsResponse {
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub stats: Stats,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Stats {
+    #[serde(default, rename = "feedCountTotal")]
+    pub feed_count_total: Option<u64>,
+    #[serde(default, rename = "episodeCountTotal")]
+    pub episode_count_total: Option<u64>,
+    #[serde(default, rename = "feedsWithNewEpisodes3days")]
+    pub feeds_with_new_episodes_3days: Option<u64>,
+    #[serde(default, rename = "feedsWithNewEpisodes10days")]
+    pub feeds_with_new_episodes_10days: Option<u64>,
+    #[serde(default, rename = "feedsWithNewEpisodes30days")]
+    pub feeds_with_new_episodes_30days: Option<u64>,
+    #[serde(default, rename = "feedsWithValueBlocks")]
+    pub feeds_with_value_blocks: Option<u64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Episode {
     #[serde(default)]
     pub id: Option<u64>,

@@ -16,6 +16,9 @@ pub enum Commands {
     Episodes(EpisodesArgs),
     Episode(EpisodeArgs),
     Trending(TrendingArgs),
+    Recent(RecentArgs),
+    Categories(CategoriesArgs),
+    Stats(StatsArgs),
     Config(ConfigArgs),
 }
 
@@ -100,6 +103,42 @@ pub struct TrendingArgs {
     pub output: Option<OutputArg>,
 }
 
+#[derive(Debug, Args)]
+pub struct RecentArgs {
+    #[arg(long, help = "Use /recent/feeds endpoint")]
+    pub feeds: bool,
+    #[arg(
+        long,
+        value_name = "unix-timestamp",
+        value_parser = parse_before,
+        conflicts_with = "feeds"
+    )]
+    pub before: Option<i64>,
+    #[arg(
+        long,
+        value_name = "unix-timestamp",
+        value_parser = parse_since,
+        requires = "feeds"
+    )]
+    pub since: Option<i64>,
+    #[arg(long, value_name = "n")]
+    pub limit: Option<u32>,
+    #[arg(long, value_enum)]
+    pub output: Option<OutputArg>,
+}
+
+#[derive(Debug, Args)]
+pub struct CategoriesArgs {
+    #[arg(long, value_enum)]
+    pub output: Option<OutputArg>,
+}
+
+#[derive(Debug, Args)]
+pub struct StatsArgs {
+    #[arg(long, value_enum)]
+    pub output: Option<OutputArg>,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum ConfigSubcommand {
     Set(ConfigSetArgs),
@@ -129,4 +168,16 @@ fn parse_episode_id(value: &str) -> std::result::Result<u64, String> {
     value
         .parse::<u64>()
         .map_err(|_| "episode-id must be an integer".to_string())
+}
+
+fn parse_before(value: &str) -> std::result::Result<i64, String> {
+    value
+        .parse::<i64>()
+        .map_err(|_| "before must be an integer timestamp".to_string())
+}
+
+fn parse_since(value: &str) -> std::result::Result<i64, String> {
+    value
+        .parse::<i64>()
+        .map_err(|_| "since must be an integer timestamp".to_string())
 }

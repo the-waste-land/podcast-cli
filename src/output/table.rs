@@ -1,6 +1,6 @@
 use prettytable::{Cell, Row, Table};
 
-use crate::api::types::{Episode, Podcast};
+use crate::api::types::{Category, Episode, Podcast, Stats};
 
 const CLIP: usize = 72;
 
@@ -130,6 +130,55 @@ pub fn render_episode_detail(episode: &Episode) -> String {
     table.to_string()
 }
 
+pub fn render_categories_list(categories: &[Category]) -> String {
+    if categories.is_empty() {
+        return "No categories found.".to_string();
+    }
+
+    let mut table = Table::new();
+    table.add_row(Row::new(vec![Cell::new("ID"), Cell::new("Name")]));
+
+    for category in categories {
+        table.add_row(Row::new(vec![
+            Cell::new(&option_u64(category.id)),
+            Cell::new(&value_or_dash_opt(category.name.as_deref())),
+        ]));
+    }
+
+    table.to_string()
+}
+
+pub fn render_stats(stats: &Stats) -> String {
+    let mut table = Table::new();
+    table.add_row(Row::new(vec![Cell::new("Metric"), Cell::new("Value")]));
+    table.add_row(Row::new(vec![
+        Cell::new("Total Feeds"),
+        Cell::new(&format_optional_count(stats.feed_count_total)),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Total Episodes"),
+        Cell::new(&format_optional_count(stats.episode_count_total)),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Feeds Updated (3d)"),
+        Cell::new(&format_optional_count(stats.feeds_with_new_episodes_3days)),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Feeds Updated (10d)"),
+        Cell::new(&format_optional_count(stats.feeds_with_new_episodes_10days)),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Feeds Updated (30d)"),
+        Cell::new(&format_optional_count(stats.feeds_with_new_episodes_30days)),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Feeds With Value Blocks"),
+        Cell::new(&format_optional_count(stats.feeds_with_value_blocks)),
+    ]));
+
+    table.to_string()
+}
+
 fn clip(value: &str) -> String {
     if value.chars().count() <= CLIP {
         return value_or_dash(value);
@@ -176,4 +225,36 @@ fn published_value(episode: &Episode) -> String {
         .date_published
         .map(|timestamp| timestamp.to_string())
         .unwrap_or_else(|| "-".to_string())
+}
+
+fn format_optional_count(value: Option<u64>) -> String {
+    value.map(format_count).unwrap_or_else(|| "-".to_string())
+}
+
+fn format_count(value: u64) -> String {
+    let digits = value.to_string();
+    let mut grouped = String::with_capacity(digits.len() + digits.len() / 3);
+
+    for (index, ch) in digits.chars().rev().enumerate() {
+        if index > 0 && index % 3 == 0 {
+            grouped.push(',');
+        }
+        grouped.push(ch);
+    }
+
+    grouped.chars().rev().collect()
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn format_count_uses_thousands_separator() {
+        assert_eq!(super::format_count(1_234_567_890), "1,234,567,890");
+    }
+
+    #[test]
+    fn format_count_handles_small_numbers() {
+        assert_eq!(super::format_count(42), "42");
+        assert_eq!(super::format_count(0), "0");
+    }
 }
