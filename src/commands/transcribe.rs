@@ -47,31 +47,14 @@ pub async fn run(args: TranscribeArgs) -> Result<()> {
         )));
     }
 
-    // Check if whisper is available
-    let whisper_available = Command::new(WHISPER_BINARY)
-        .arg("--version")
-        .output()
-        .is_ok();
-
-    if !whisper_available {
-        return Err(PodcastCliError::Validation(
-            "whisper CLI not found. Please install whisper: pip install openai-whisper".to_string(),
-        ));
-    }
-
-    // Prepare output path
-    let output_path = if let Some(output) = args.output {
-        output
-    } else {
-        let stem = audio_path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("transcript");
-        audio_path.parent().unwrap_or(&audio_path).join(stem)
+    // Try faster-whisper first, then fall back to whisper CLI
+    let result = match try_faster_whisper(&audio_path, &args.model, &args.language) {
+        Ok(r) => r,
+        Err(_e) => {
+            // Fall back to whisper CLI
+            run_whisper_cli(&audio_path, &args.model, &args.language, &args.format)?
+        }
     };
-
-    // Run whisper
-    let result = run_whisper(&audio_path, &args.model, &args.language, &output_path, args.format)?;
 
     // Handle output based on format
     match args.format {
@@ -93,25 +76,122 @@ pub async fn run(args: TranscribeArgs) -> Result<()> {
     Ok(())
 }
 
-fn run_whisper(
+fn try_faster_whisper(
     audio_path: &PathBuf,
     model: &str,
     language: &str,
-    output_path: &PathBuf,
-    format: crate::cli::TranscribeFormat,
 ) -> Result<TranscribeResult> {
+    // Check if faster-whisper is available
+    let check = Command::new("python3")
+        .arg("-c")
+        .arg("from faster_whisper import WhisperModel")
+        .output();
+
+    if check.is_err() {
+        return Err(PodcastCliError::Validation(
+            "faster-whisper not available".to_string(),
+        ));
+    }
+
+    // Build and run the Python script
+    let script = format!(
+        r#"
+from faster_whisper import WhisperModel
+import json
+import sys
+
+model = WhisperModel("{}", device="cpu", compute_type="int8")
+segments, info = model.transcribe("{}", language="{}")
+
+result = {{
+    "text": " ".join([s.text for s in segments]),
+    "segments": [{{
+        "id": s.idx,
+        "start": s.start,
+        "end": s.end,
+        "text": s.text
+    }} for s in segments],
+    "language": info.language,
+    "model": "{}",
+    "duration": sum([s.end - s.start for s in segments])
+}}
+
+print(json.dumps(result))
+"#,
+        model,
+        audio_path.to_string_lossy(),
+        language,
+        model
+    );
+
+    let output = Command::new("python3")
+        .arg("-c")
+        .arg(&script)
+        .output()
+        .map_err(|e| {
+            PodcastCliError::Validation(format!("failed to run faster-whisper: {}", e))
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(PodcastCliError::Validation(format!(
+            "faster-whisper failed: {}",
+            stderr
+        )));
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    
+    #[derive(Deserialize)]
+    struct FasterWhisperResult {
+        text: String,
+        segments: Vec<TranscriptSegment>,
+        language: String,
+        model: String,
+        duration: f64,
+    }
+
+    let result: FasterWhisperResult = serde_json::from_str(&stdout).map_err(|e| {
+        PodcastCliError::Validation(format!("failed to parse faster-whisper output: {}", e))
+    })?;
+
+    Ok(TranscribeResult {
+        text: result.text,
+        segments: result.segments,
+        language: result.language,
+        model: result.model,
+        duration: result.duration,
+    })
+}
+
+fn run_whisper_cli(
+    audio_path: &PathBuf,
+    model: &str,
+    language: &str,
+    format: &crate::cli::TranscribeFormat,
+) -> Result<TranscribeResult> {
+    // Check if whisper CLI is available
+    let whisper_available = Command::new(WHISPER_BINARY)
+        .arg("--version")
+        .output()
+        .is_ok();
+
+    if !whisper_available {
+        return Err(PodcastCliError::Validation(
+            "whisper CLI not found. Please install whisper: pip install openai-whisper".to_string(),
+        ));
+    }
+
+    // Create temp output path
+    let temp_dir = std::env::temp_dir();
+    let _temp_output = temp_dir.join("transcript");
+
     // Determine output format for whisper
     let whisper_format = match format {
         crate::cli::TranscribeFormat::Json => "json",
         crate::cli::TranscribeFormat::Text => "txt",
         crate::cli::TranscribeFormat::Srt => "srt",
     };
-
-    // Create temp output path
-    let _temp_output = output_path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("transcript");
 
     let mut cmd = Command::new(WHISPER_BINARY);
     cmd.arg("--model")
@@ -121,7 +201,7 @@ fn run_whisper(
         .arg("--output_format")
         .arg(whisper_format)
         .arg("--output_dir")
-        .arg(output_path.parent().unwrap_or(output_path))
+        .arg(&temp_dir)
         .arg(audio_path);
 
     let output = cmd.output().map_err(|e| {
@@ -137,20 +217,17 @@ fn run_whisper(
     }
 
     // Read the output file
-    let output_file = output_path.with_extension(match format {
+    let output_file = temp_dir.join(format!("transcript.{}", match format {
         crate::cli::TranscribeFormat::Json => "json",
         crate::cli::TranscribeFormat::Text => "txt",
         crate::cli::TranscribeFormat::Srt => "srt",
-    });
+    }));
 
-    let content = std::fs::read_to_string(&output_file).map_err(|e| {
-        PodcastCliError::Io(e)
-    })?;
+    let content = std::fs::read_to_string(&output_file).map_err(PodcastCliError::Io)?;
 
     // Parse result based on format
     match format {
         crate::cli::TranscribeFormat::Json => {
-            // Parse whisper JSON output
             #[derive(Deserialize)]
             struct WhisperJson {
                 text: String,
@@ -183,7 +260,7 @@ fn run_whisper(
                     .collect(),
                 language: language.to_string(),
                 model: model.to_string(),
-                duration: 0.0, // Could extract from metadata
+                duration: 0.0,
             })
         }
         crate::cli::TranscribeFormat::Text => Ok(TranscribeResult {
@@ -194,7 +271,6 @@ fn run_whisper(
             duration: 0.0,
         }),
         crate::cli::TranscribeFormat::Srt => {
-            // Parse SRT to segments
             let segments = srt_to_segments(&content)?;
             let text = segments.iter().map(|s| s.text.trim()).collect::<Vec<_>>().join(" ");
 
