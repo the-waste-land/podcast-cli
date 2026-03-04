@@ -9,6 +9,7 @@ Rust CLI for [Podcast Index API](https://podcastindex-org.github.io/docs-api/), 
 
 - Rust toolchain (`cargo`)
 - Podcast Index credentials: `api_key` and `api_secret`
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) (for YouTube features)
 
 ## Install
 
@@ -77,6 +78,8 @@ podcast-cli stats
 | `categories` | Category list | `--output` |
 | `stats` | Platform metrics | `--output` |
 | `config set/show/clear` | Manage local config | `--api-key` `--api-secret` `--default-output` `--max-results` |
+| `youtube-search <query>` | Search YouTube videos | `--limit` `--channel` `--since` |
+| `youtube-subtitles <video-id>` | Download YouTube subtitles | `--lang` `--output` |
 
 ## Output Modes
 
@@ -97,6 +100,16 @@ podcast-cli categories --output json
 
 # Stats in JSON
 podcast-cli stats --output json
+
+# YouTube search
+podcast-cli youtube-search "Sam Altman" --limit 5
+podcast-cli youtube-search --channel "Lex Fridman" --since 30d
+
+# YouTube subtitles (JSON output)
+podcast-cli youtube-subtitles 5MWT_doo68k --lang en --output json
+
+# YouTube subtitles (SRT format)
+podcast-cli youtube-subtitles 5MWT_doo68k --lang en --output srt
 ```
 
 ## Validation Rules

@@ -1,6 +1,7 @@
 use crate::api::client::PodcastIndexClient;
 use crate::api::types::{RecentEpisodesResponse, RecentFeedsResponse};
-use crate::error::{PodcastCliError, Result};
+use crate::api::validation::{validate_max, validate_timestamp};
+use crate::error::Result;
 
 pub async fn get_recent_episodes(
     client: &PodcastIndexClient,
@@ -48,22 +49,3 @@ pub async fn get_recent_feeds(
     client.get_json("/recent/feeds", &query).await
 }
 
-fn validate_max(max: u32) -> Result<()> {
-    if (1..=100).contains(&max) {
-        Ok(())
-    } else {
-        Err(PodcastCliError::Validation(
-            "limit must be in range 1..=100".to_string(),
-        ))
-    }
-}
-
-fn validate_timestamp(label: &str, value: i64) -> Result<()> {
-    if value >= 0 {
-        Ok(())
-    } else {
-        Err(PodcastCliError::Validation(format!(
-            "{label} must be a non-negative unix timestamp"
-        )))
-    }
-}

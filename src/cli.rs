@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 
 use crate::output::OutputFormat;
@@ -15,6 +17,9 @@ pub enum Commands {
     Show(ShowArgs),
     Episodes(EpisodesArgs),
     Episode(EpisodeArgs),
+    Download(DownloadArgs),
+    YoutubeSubtitles(YoutubeSubtitlesArgs),
+    YoutubeSearch(YoutubeSearchArgs),
     Trending(TrendingArgs),
     Recent(RecentArgs),
     Categories(CategoriesArgs),
@@ -27,6 +32,14 @@ pub enum Commands {
 pub enum OutputArg {
     Json,
     Table,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "lower")]
+pub enum SubtitleOutputArg {
+    Json,
+    Text,
+    Srt,
 }
 
 impl From<OutputArg> for OutputFormat {
@@ -89,6 +102,65 @@ pub struct EpisodeArgs {
     pub episode_id: u64,
     #[arg(long, value_enum)]
     pub output: Option<OutputArg>,
+}
+
+#[derive(Debug, Args)]
+pub struct DownloadArgs {
+    #[arg(value_name = "episode-id", value_parser = parse_episode_id)]
+    pub episode_id: u64,
+    #[arg(long, value_name = "path")]
+    pub dest: Option<PathBuf>,
+    #[arg(long, value_name = "name")]
+    pub filename: Option<String>,
+    #[arg(long, conflicts_with = "dry_run")]
+    pub overwrite: bool,
+    #[arg(long, conflicts_with = "dry_run")]
+    pub resume: bool,
+    #[arg(
+        long,
+        value_name = "seconds",
+        default_value_t = 120,
+        value_parser = parse_timeout
+    )]
+    pub timeout: u64,
+    #[arg(long)]
+    pub no_progress: bool,
+    #[arg(long, conflicts_with = "no_progress")]
+    pub progress_json: bool,
+    #[arg(long, conflicts_with_all = ["resume", "overwrite"])]
+    pub dry_run: bool,
+    #[arg(
+        long = "path-only",
+        alias = "quiet",
+        conflicts_with_all = ["minimal", "output"]
+    )]
+    pub path_only: bool,
+    #[arg(long, conflicts_with_all = ["path_only", "output"])]
+    pub minimal: bool,
+    #[arg(long, value_enum, conflicts_with_all = ["path_only", "minimal"])]
+    pub output: Option<OutputArg>,
+}
+
+#[derive(Debug, Args)]
+pub struct YoutubeSubtitlesArgs {
+    #[arg(value_name = "video-id", value_parser = parse_youtube_video_id)]
+    pub video_id: String,
+    #[arg(long, value_name = "code", default_value = "en", value_parser = parse_lang_code)]
+    pub lang: String,
+    #[arg(long, value_enum, default_value_t = SubtitleOutputArg::Json)]
+    pub output: SubtitleOutputArg,
+}
+
+#[derive(Debug, Args)]
+pub struct YoutubeSearchArgs {
+    #[arg(value_name = "query", value_parser = parse_non_empty)]
+    pub query: String,
+    #[arg(long, value_name = "n")]
+    pub limit: Option<u32>,
+    #[arg(long, value_name = "name", help = "Filter results by channel name", value_parser = parse_non_empty)]
+    pub channel: Option<String>,
+    #[arg(long, value_name = "range", help = "Only include videos uploaded within range, e.g. 7d, 30d", value_parser = parse_youtube_since)]
+    pub since: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -180,4 +252,76 @@ fn parse_since(value: &str) -> std::result::Result<i64, String> {
     value
         .parse::<i64>()
         .map_err(|_| "since must be an integer timestamp".to_string())
+}
+
+fn parse_timeout(value: &str) -> std::result::Result<u64, String> {
+    let timeout = value
+        .parse::<u64>()
+        .map_err(|_| "timeout must be an integer".to_string())?;
+
+    if timeout == 0 {
+        return Err("timeout must be greater than 0".to_string());
+    }
+
+    Ok(timeout)
+}
+
+fn parse_lang_code(value: &str) -> std::result::Result<String, String> {
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        return Err("lang must not be empty".to_string());
+    }
+
+    Ok(normalized.to_string())
+}
+
+fn parse_youtube_since(value: &str) -> std::result::Result<String, String> {
+    let normalized = value.trim().to_ascii_lowercase();
+    if normalized.len() < 2 {
+        return Err("since must be like 7d, 2w, 1m, or 1y".to_string());
+    }
+
+    let split_at = normalized.len() - 1;
+    let (amount_raw, unit) = normalized.split_at(split_at);
+    let amount = amount_raw
+        .parse::<u32>()
+        .map_err(|_| "since must be like 7d, 2w, 1m, or 1y".to_string())?;
+
+    if amount == 0 {
+        return Err("since must be greater than 0".to_string());
+    }
+
+    let suffix = match unit {
+        "d" => "days",
+        "w" => "weeks",
+        "m" => "months",
+        "y" => "years",
+        _ => return Err("since must be like 7d, 2w, 1m, or 1y".to_string()),
+    };
+
+    Ok(format!("now-{amount}{suffix}"))
+}
+
+fn parse_non_empty(value: &str) -> std::result::Result<String, String> {
+    let normalized = value.trim();
+    if normalized.is_empty() {
+        return Err("value must not be empty".to_string());
+    }
+
+    Ok(normalized.to_string())
+}
+
+fn parse_youtube_video_id(value: &str) -> std::result::Result<String, String> {
+    if value.len() != 11 {
+        return Err("video-id must be 11 chars and use [A-Za-z0-9_-]".to_string());
+    }
+
+    if value
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-' || ch == '_')
+    {
+        Ok(value.to_string())
+    } else {
+        Err("video-id must be 11 chars and use [A-Za-z0-9_-]".to_string())
+    }
 }

@@ -1,6 +1,7 @@
 use crate::api::client::PodcastIndexClient;
 use crate::api::types::PodcastResponse;
-use crate::error::{PodcastCliError, Result};
+use crate::api::validation::validate_max;
+use crate::error::Result;
 
 pub async fn podcast_by_feed_id(
     client: &PodcastIndexClient,
@@ -33,12 +34,3 @@ pub async fn get_trending_podcasts(
     client.get_json("/podcasts/trending", &query).await
 }
 
-fn validate_max(max: u32) -> Result<()> {
-    if (1..=100).contains(&max) {
-        Ok(())
-    } else {
-        Err(PodcastCliError::Validation(
-            "limit must be in range 1..=100".to_string(),
-        ))
-    }
-}
