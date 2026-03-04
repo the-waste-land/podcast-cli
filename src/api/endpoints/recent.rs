@@ -48,4 +48,3 @@ pub async fn get_recent_feeds(
 
     client.get_json("/recent/feeds", &query).await
 }
-

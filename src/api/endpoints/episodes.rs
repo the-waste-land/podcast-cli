@@ -39,7 +39,6 @@ pub async fn get_trending_episodes(
     client.get_json(TRENDING_EPISODES_PATH, &query).await
 }
 
-
 #[cfg(test)]
 mod tests {
     #[test]

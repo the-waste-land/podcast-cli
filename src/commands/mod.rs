@@ -6,6 +6,7 @@ pub mod recent;
 pub mod search;
 pub mod show;
 pub mod stats;
+pub mod transcribe;
 pub mod trending;
 pub mod youtube_search;
 pub mod youtube_subtitles;
@@ -21,6 +22,7 @@ pub async fn dispatch(command: Commands, manager: &ConfigManager) -> Result<()> 
         Commands::Episodes(args) => episodes::run_episodes(args, manager).await,
         Commands::Episode(args) => episodes::run_episode(args, manager).await,
         Commands::Download(args) => download::run(args, manager).await,
+        Commands::Transcribe(args) => transcribe::run(args).await,
         Commands::YoutubeSubtitles(args) => youtube_subtitles::run(args).await,
         Commands::YoutubeSearch(args) => youtube_search::run(args).await,
         Commands::Trending(args) => trending::run(args, manager).await,

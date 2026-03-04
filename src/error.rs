@@ -16,6 +16,8 @@ pub enum PodcastCliError {
     Http(#[from] reqwest::Error),
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
 }
 
 impl PodcastCliError {
@@ -27,6 +29,7 @@ impl PodcastCliError {
             Self::Api(_) | Self::Http(_) => 5,
             Self::Io(_) => 6,
             Self::Serialization(_) => 1,
+            Self::NotImplemented(_) => 7,
         }
     }
 
@@ -38,6 +41,7 @@ impl PodcastCliError {
             Self::Api(_) | Self::Http(_) => "network_error",
             Self::Io(_) => "io_error",
             Self::Serialization(_) => "serialization_error",
+            Self::NotImplemented(_) => "not_implemented",
         }
     }
 }
@@ -69,6 +73,41 @@ mod tests {
         assert_eq!(
             PodcastCliError::Io(std::io::Error::other("disk full")).exit_code(),
             6
+        );
+    }
+
+    #[test]
+    fn progress_code_mapping_matches_contract() {
+        assert_eq!(
+            PodcastCliError::Validation("bad args".to_string()).progress_code(),
+            "validation_error"
+        );
+        assert_eq!(
+            PodcastCliError::Config("missing key".to_string()).progress_code(),
+            "config_error"
+        );
+        assert_eq!(
+            PodcastCliError::Metadata("missing enclosure".to_string()).progress_code(),
+            "metadata_error"
+        );
+        assert_eq!(
+            PodcastCliError::Api("status 500".to_string()).progress_code(),
+            "network_error"
+        );
+        assert_eq!(
+            PodcastCliError::Io(std::io::Error::other("disk full")).progress_code(),
+            "io_error"
+        );
+
+        let serialization = serde_json::from_str::<serde_json::Value>("not-json")
+            .expect_err("must produce serde_json error");
+        assert_eq!(
+            PodcastCliError::Serialization(serialization).progress_code(),
+            "serialization_error"
+        );
+        assert_eq!(
+            PodcastCliError::NotImplemented("pending".to_string()).progress_code(),
+            "not_implemented"
         );
     }
 }
