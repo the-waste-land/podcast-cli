@@ -8,7 +8,7 @@ use crate::error::{PodcastCliError, Result};
 use crate::output::json::to_pretty_json;
 
 const YT_DLP_BINARY: &str = "yt-dlp";
-const YT_DLP_PRINT_TEMPLATE: &str = "%(id)s|%(title)s|%(channel)s|%(duration)s|%(upload_date)s";
+const YT_DLP_PRINT_TEMPLATE: &str = "%(id)s\t%(title)s\t%(channel)s\t%(duration)s\t%(upload_date)s";
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub struct YoutubeSearchItem {
@@ -133,7 +133,7 @@ fn requested_fetch_limit(limit: u32, since_enabled: bool) -> u32 {
 }
 
 fn parse_row(line: &str) -> Option<YoutubeSearchItem> {
-    let mut parts = line.splitn(5, '|');
+    let mut parts = line.splitn(5, '\t');
 
     let video_id = parts.next()?.trim();
     let title = parts.next()?.trim();
@@ -176,7 +176,7 @@ mod tests {
 
     #[test]
     fn parse_row_to_item() {
-        let row = "dQw4w9WgXcQ|Never Gonna Give You Up|Rick Astley|213|19871025";
+        let row = "dQw4w9WgXcQ\tNever Gonna Give You Up\tRick Astley\t213\t19871025";
         let item = parse_row(row).expect("row should parse");
 
         assert_eq!(item.video_id, "dQw4w9WgXcQ");
@@ -189,7 +189,14 @@ mod tests {
 
     #[test]
     fn parse_row_rejects_missing_video_id() {
-        assert!(parse_row("|title|channel|60|20250101").is_none());
+        assert!(parse_row("\ttitle\tchannel\t60\t20250101").is_none());
+    }
+
+    #[test]
+    fn parse_row_allows_pipe_in_title() {
+        let row = "abc123\tA | B title\tChannel\t60\t20250101";
+        let item = parse_row(row).expect("row should parse");
+        assert_eq!(item.title, "A | B title");
     }
 
     #[test]
