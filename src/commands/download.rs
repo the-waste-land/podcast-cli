@@ -461,7 +461,10 @@ async fn execute_download(
     file.sync_data()?;
     drop(file);
 
-    promote_part_file(&part_path, target_path, overwrite)?;
+    // When resuming a download (resume_from > 0), we should allow overwriting the target
+    // because we're completing a previously started download that has a .part file
+    let allow_overwrite = overwrite || resume_from > 0;
+    promote_part_file(&part_path, target_path, allow_overwrite)?;
 
     progress.emit_finish(target_path, bytes_written);
 
