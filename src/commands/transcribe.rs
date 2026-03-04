@@ -101,19 +101,22 @@ import json
 import sys
 
 model = WhisperModel("{}", device="cpu", compute_type="int8")
-segments, info = model.transcribe("{}", language="{}")
+segments_gen, info = model.transcribe("{}", language="{}")
+
+# Collect segments first (generator can only be iterated once)
+segments_list = list(segments_gen)
 
 result = {{
-    "text": " ".join([s.text for s in segments]),
+    "text": " ".join([s.text for s in segments_list]),
     "segments": [{{
-        "id": s.idx,
+        "id": s.id,
         "start": s.start,
         "end": s.end,
         "text": s.text
-    }} for s in segments],
+    }} for s in segments_list],
     "language": info.language,
     "model": "{}",
-    "duration": sum([s.end - s.start for s in segments])
+    "duration": sum([s.end - s.start for s in segments_list])
 }}
 
 print(json.dumps(result))
