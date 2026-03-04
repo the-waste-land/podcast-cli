@@ -8,8 +8,7 @@ use crate::error::{PodcastCliError, Result};
 use crate::output::json::to_pretty_json;
 
 const YT_DLP_BINARY: &str = "yt-dlp";
-const YT_DLP_PRINT_TEMPLATE: &str =
-    "%(id)s|%(title)s|%(channel)s|%(duration)s|%(upload_date)s";
+const YT_DLP_PRINT_TEMPLATE: &str = "%(id)s|%(title)s|%(channel)s|%(duration)s|%(upload_date)s";
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub struct YoutubeSearchItem {
