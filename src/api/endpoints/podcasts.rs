@@ -33,4 +33,3 @@ pub async fn get_trending_podcasts(
 
     client.get_json("/podcasts/trending", &query).await
 }
-

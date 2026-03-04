@@ -109,36 +109,51 @@ pub struct EpisodeArgs {
 pub struct DownloadArgs {
     #[arg(value_name = "episode-id", value_parser = parse_episode_id)]
     pub episode_id: u64,
-    #[arg(long, value_name = "path")]
+    #[arg(long, value_name = "path", help = "Download destination file or directory")]
     pub dest: Option<PathBuf>,
-    #[arg(long, value_name = "name")]
+    #[arg(long, value_name = "name", help = "Override output filename")]
     pub filename: Option<String>,
-    #[arg(long, conflicts_with = "dry_run")]
+    #[arg(long, conflicts_with = "dry_run", help = "Replace existing target file")]
     pub overwrite: bool,
-    #[arg(long, conflicts_with = "dry_run")]
+    #[arg(long, conflicts_with = "dry_run", help = "Resume from existing .part file")]
     pub resume: bool,
     #[arg(
         long,
         value_name = "seconds",
+        help = "HTTP timeout in seconds",
         default_value_t = 120,
         value_parser = parse_timeout
     )]
     pub timeout: u64,
-    #[arg(long)]
+    #[arg(long, help = "Disable progress output")]
     pub no_progress: bool,
-    #[arg(long, conflicts_with = "no_progress")]
+    #[arg(long, conflicts_with = "no_progress", help = "Emit progress as JSON lines to stderr")]
     pub progress_json: bool,
-    #[arg(long, conflicts_with_all = ["resume", "overwrite"])]
+    #[arg(
+        long,
+        conflicts_with_all = ["resume", "overwrite"],
+        help = "Show resolved download metadata without downloading"
+    )]
     pub dry_run: bool,
     #[arg(
         long = "path-only",
         alias = "quiet",
+        help = "Print only the resolved output path",
         conflicts_with_all = ["minimal", "output"]
     )]
     pub path_only: bool,
-    #[arg(long, conflicts_with_all = ["path_only", "output"])]
+    #[arg(
+        long,
+        help = "Emit compact JSON output for scripting",
+        conflicts_with_all = ["path_only", "output"]
+    )]
     pub minimal: bool,
-    #[arg(long, value_enum, conflicts_with_all = ["path_only", "minimal"])]
+    #[arg(
+        long,
+        value_enum,
+        help = "Output format for full command results",
+        conflicts_with_all = ["path_only", "minimal"]
+    )]
     pub output: Option<OutputArg>,
 }
 

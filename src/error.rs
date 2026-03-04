@@ -75,4 +75,39 @@ mod tests {
             6
         );
     }
+
+    #[test]
+    fn progress_code_mapping_matches_contract() {
+        assert_eq!(
+            PodcastCliError::Validation("bad args".to_string()).progress_code(),
+            "validation_error"
+        );
+        assert_eq!(
+            PodcastCliError::Config("missing key".to_string()).progress_code(),
+            "config_error"
+        );
+        assert_eq!(
+            PodcastCliError::Metadata("missing enclosure".to_string()).progress_code(),
+            "metadata_error"
+        );
+        assert_eq!(
+            PodcastCliError::Api("status 500".to_string()).progress_code(),
+            "network_error"
+        );
+        assert_eq!(
+            PodcastCliError::Io(std::io::Error::other("disk full")).progress_code(),
+            "io_error"
+        );
+
+        let serialization = serde_json::from_str::<serde_json::Value>("not-json")
+            .expect_err("must produce serde_json error");
+        assert_eq!(
+            PodcastCliError::Serialization(serialization).progress_code(),
+            "serialization_error"
+        );
+        assert_eq!(
+            PodcastCliError::NotImplemented("pending".to_string()).progress_code(),
+            "not_implemented"
+        );
+    }
 }

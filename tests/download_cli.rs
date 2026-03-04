@@ -42,6 +42,32 @@ fn parse_download_with_dry_run_and_minimal() {
 }
 
 #[test]
+fn parse_download_with_resume_flag() {
+    let cli = Cli::parse_from(["podcast", "download", "123456", "--resume"]);
+
+    match cli.command {
+        Commands::Download(args) => {
+            assert!(args.resume);
+            assert!(!args.overwrite);
+        }
+        _ => panic!("expected download command"),
+    }
+}
+
+#[test]
+fn parse_download_with_overwrite_flag() {
+    let cli = Cli::parse_from(["podcast", "download", "123456", "--overwrite"]);
+
+    match cli.command {
+        Commands::Download(args) => {
+            assert!(args.overwrite);
+            assert!(!args.resume);
+        }
+        _ => panic!("expected download command"),
+    }
+}
+
+#[test]
 fn reject_path_only_with_output() {
     let err = Cli::try_parse_from([
         "podcast",

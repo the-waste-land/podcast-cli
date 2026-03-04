@@ -461,9 +461,7 @@ async fn execute_download(
     file.sync_data()?;
     drop(file);
 
-    // When resuming a download (resume_from > 0), we should allow overwriting the target
-    // because we're completing a previously started download that has a .part file
-    let allow_overwrite = overwrite || resume_from > 0;
+    let allow_overwrite = should_allow_overwrite(overwrite, resume_from);
     promote_part_file(&part_path, target_path, allow_overwrite)?;
 
     progress.emit_finish(target_path, bytes_written);
@@ -586,6 +584,10 @@ fn copy_part_file_noclobber(part_path: &Path, target_path: &Path) -> Result<()> 
 
     fs::remove_file(part_path)?;
     Ok(())
+}
+
+fn should_allow_overwrite(overwrite: bool, resume_from: u64) -> bool {
+    overwrite || resume_from > 0
 }
 
 fn target_exists_error(target_path: &Path) -> PodcastCliError {
@@ -1038,5 +1040,20 @@ mod tests {
         promote_part_file(&part, &target, true).expect("overwrite should replace target");
         assert_eq!(fs::read(&target).expect("read target"), b"new");
         assert!(!part.exists());
+    }
+
+    #[test]
+    fn should_allow_overwrite_when_flag_is_set() {
+        assert!(should_allow_overwrite(true, 0));
+    }
+
+    #[test]
+    fn should_allow_overwrite_when_resuming_partial_download() {
+        assert!(should_allow_overwrite(false, 1));
+    }
+
+    #[test]
+    fn should_not_allow_overwrite_for_new_download_without_flag() {
+        assert!(!should_allow_overwrite(false, 0));
     }
 }

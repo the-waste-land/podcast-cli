@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
@@ -7,6 +7,36 @@ use crate::cli::TranscribeArgs;
 use crate::error::{PodcastCliError, Result};
 
 const WHISPER_BINARY: &str = "whisper";
+const FASTER_WHISPER_SCRIPT: &str = r#"
+from faster_whisper import WhisperModel
+import json
+import sys
+
+model_name = sys.argv[1]
+audio_path = sys.argv[2]
+language = sys.argv[3]
+
+model = WhisperModel(model_name, device="cpu", compute_type="int8")
+segments_gen, info = model.transcribe(audio_path, language=language)
+
+# Collect segments first (generator can only be iterated once)
+segments_list = list(segments_gen)
+
+result = {
+    "text": " ".join([s.text for s in segments_list]),
+    "segments": [{
+        "id": s.id,
+        "start": s.start,
+        "end": s.end,
+        "text": s.text
+    } for s in segments_list],
+    "language": info.language,
+    "model": model_name,
+    "duration": sum([s.end - s.start for s in segments_list])
+}
+
+print(json.dumps(result))
+"#;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TranscriptSegment {
@@ -77,7 +107,7 @@ pub async fn run(args: TranscribeArgs) -> Result<()> {
 }
 
 fn try_faster_whisper(
-    audio_path: &PathBuf,
+    audio_path: &Path,
     model: &str,
     language: &str,
 ) -> Result<TranscribeResult> {
@@ -93,43 +123,12 @@ fn try_faster_whisper(
         ));
     }
 
-    // Build and run the Python script
-    let script = format!(
-        r#"
-from faster_whisper import WhisperModel
-import json
-import sys
-
-model = WhisperModel("{}", device="cpu", compute_type="int8")
-segments_gen, info = model.transcribe("{}", language="{}")
-
-# Collect segments first (generator can only be iterated once)
-segments_list = list(segments_gen)
-
-result = {{
-    "text": " ".join([s.text for s in segments_list]),
-    "segments": [{{
-        "id": s.id,
-        "start": s.start,
-        "end": s.end,
-        "text": s.text
-    }} for s in segments_list],
-    "language": info.language,
-    "model": "{}",
-    "duration": sum([s.end - s.start for s in segments_list])
-}}
-
-print(json.dumps(result))
-"#,
-        model,
-        audio_path.to_string_lossy(),
-        language,
-        model
-    );
-
     let output = Command::new("python3")
         .arg("-c")
-        .arg(&script)
+        .arg(FASTER_WHISPER_SCRIPT)
+        .arg(model)
+        .arg(audio_path)
+        .arg(language)
         .output()
         .map_err(|e| {
             PodcastCliError::Validation(format!("failed to run faster-whisper: {}", e))
@@ -168,7 +167,7 @@ print(json.dumps(result))
 }
 
 fn run_whisper_cli(
-    audio_path: &PathBuf,
+    audio_path: &Path,
     model: &str,
     language: &str,
     format: &crate::cli::TranscribeFormat,
