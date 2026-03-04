@@ -16,6 +16,8 @@ pub enum PodcastCliError {
     Http(#[from] reqwest::Error),
     #[error("Serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+    #[error("Not implemented: {0}")]
+    NotImplemented(String),
 }
 
 impl PodcastCliError {
@@ -27,6 +29,7 @@ impl PodcastCliError {
             Self::Api(_) | Self::Http(_) => 5,
             Self::Io(_) => 6,
             Self::Serialization(_) => 1,
+            Self::NotImplemented(_) => 7,
         }
     }
 
@@ -38,6 +41,7 @@ impl PodcastCliError {
             Self::Api(_) | Self::Http(_) => "network_error",
             Self::Io(_) => "io_error",
             Self::Serialization(_) => "serialization_error",
+            Self::NotImplemented(_) => "not_implemented",
         }
     }
 }

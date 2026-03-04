@@ -18,6 +18,7 @@ pub enum Commands {
     Episodes(EpisodesArgs),
     Episode(EpisodeArgs),
     Download(DownloadArgs),
+    Transcribe(TranscribeArgs),
     YoutubeSubtitles(YoutubeSubtitlesArgs),
     YoutubeSearch(YoutubeSearchArgs),
     Trending(TrendingArgs),
@@ -139,6 +140,35 @@ pub struct DownloadArgs {
     pub minimal: bool,
     #[arg(long, value_enum, conflicts_with_all = ["path_only", "minimal"])]
     pub output: Option<OutputArg>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+#[value(rename_all = "lower")]
+pub enum TranscribeFormat {
+    Json,
+    Text,
+    Srt,
+}
+
+#[derive(Debug, Args)]
+#[command(group(
+    ArgGroup::new("transcribe_input")
+        .required(true)
+        .args(["audio_file", "episode_id"])
+))]
+pub struct TranscribeArgs {
+    #[arg(value_name = "audio-file", conflicts_with = "episode_id")]
+    pub audio_file: Option<PathBuf>,
+    #[arg(long, value_name = "episode-id", value_parser = parse_episode_id, conflicts_with = "audio_file")]
+    pub episode_id: Option<u64>,
+    #[arg(long, help = "Whisper model to use", default_value = "base")]
+    pub model: String,
+    #[arg(long, value_name = "code", help = "Language code", default_value = "en")]
+    pub language: String,
+    #[arg(long, value_enum, default_value_t = TranscribeFormat::Text)]
+    pub format: TranscribeFormat,
+    #[arg(long, value_name = "path", help = "Output file path")]
+    pub output: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
