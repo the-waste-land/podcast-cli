@@ -1,5 +1,6 @@
 pub mod categories;
 pub mod config;
+pub mod download;
 pub mod episodes;
 pub mod recent;
 pub mod search;
@@ -17,6 +18,7 @@ pub async fn dispatch(command: Commands, manager: &ConfigManager) -> Result<()> 
         Commands::Show(args) => show::run(args, manager).await,
         Commands::Episodes(args) => episodes::run_episodes(args, manager).await,
         Commands::Episode(args) => episodes::run_episode(args, manager).await,
+        Commands::Download(args) => download::run(args, manager).await,
         Commands::Trending(args) => trending::run(args, manager).await,
         Commands::Recent(args) => recent::run(args, manager).await,
         Commands::Categories(args) => categories::run(args, manager).await,

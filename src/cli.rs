@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use clap::{ArgGroup, Args, Parser, Subcommand, ValueEnum};
 
 use crate::output::OutputFormat;
@@ -15,6 +17,7 @@ pub enum Commands {
     Show(ShowArgs),
     Episodes(EpisodesArgs),
     Episode(EpisodeArgs),
+    Download(DownloadArgs),
     Trending(TrendingArgs),
     Recent(RecentArgs),
     Categories(CategoriesArgs),
@@ -88,6 +91,43 @@ pub struct EpisodeArgs {
     #[arg(value_name = "episode-id", value_parser = parse_episode_id)]
     pub episode_id: u64,
     #[arg(long, value_enum)]
+    pub output: Option<OutputArg>,
+}
+
+#[derive(Debug, Args)]
+pub struct DownloadArgs {
+    #[arg(value_name = "episode-id", value_parser = parse_episode_id)]
+    pub episode_id: u64,
+    #[arg(long, value_name = "path")]
+    pub dest: Option<PathBuf>,
+    #[arg(long, value_name = "name")]
+    pub filename: Option<String>,
+    #[arg(long, conflicts_with = "dry_run")]
+    pub overwrite: bool,
+    #[arg(long, conflicts_with = "dry_run")]
+    pub resume: bool,
+    #[arg(
+        long,
+        value_name = "seconds",
+        default_value_t = 120,
+        value_parser = parse_timeout
+    )]
+    pub timeout: u64,
+    #[arg(long)]
+    pub no_progress: bool,
+    #[arg(long, conflicts_with = "no_progress")]
+    pub progress_json: bool,
+    #[arg(long, conflicts_with_all = ["resume", "overwrite"])]
+    pub dry_run: bool,
+    #[arg(
+        long = "path-only",
+        alias = "quiet",
+        conflicts_with_all = ["minimal", "output"]
+    )]
+    pub path_only: bool,
+    #[arg(long, conflicts_with_all = ["path_only", "output"])]
+    pub minimal: bool,
+    #[arg(long, value_enum, conflicts_with_all = ["path_only", "minimal"])]
     pub output: Option<OutputArg>,
 }
 
@@ -180,4 +220,16 @@ fn parse_since(value: &str) -> std::result::Result<i64, String> {
     value
         .parse::<i64>()
         .map_err(|_| "since must be an integer timestamp".to_string())
+}
+
+fn parse_timeout(value: &str) -> std::result::Result<u64, String> {
+    let timeout = value
+        .parse::<u64>()
+        .map_err(|_| "timeout must be an integer".to_string())?;
+
+    if timeout == 0 {
+        return Err("timeout must be greater than 0".to_string());
+    }
+
+    Ok(timeout)
 }

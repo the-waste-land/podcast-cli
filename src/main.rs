@@ -8,7 +8,7 @@ use podcast_cli::error::Result;
 async fn main() {
     if let Err(err) = run().await {
         eprintln!("{err}");
-        std::process::exit(1);
+        std::process::exit(err.exit_code());
     }
 }
 
