@@ -75,7 +75,8 @@ podcast-cli stats
 | `categories` | Category list | `--output` |
 | `stats` | Platform metrics | `--output` |
 | `config set/show/clear` | Manage local config | `--api-key` `--api-secret` `--default-output` `--max-results` |
-| `youtube-search <query>` | Search YouTube videos | `--limit` `--channel` `--since` |
+| `youtube-search <query>` | Search YouTube videos | `--limit` `--channel` `--since` `--with-meta` `--meta-concurrency` `--meta-timeout` |
+| `youtube-meta <video-id>` | Fetch YouTube metadata for a single video | `--output <json&#124;table>` |
 | `youtube-subtitles <video-id>` | Download YouTube subtitles | `--lang` `--output` |
 
 ## Output Modes
@@ -104,6 +105,12 @@ podcast-cli transcribe ./episode.mp3 --language en
 # YouTube search
 podcast-cli youtube-search "Sam Altman" --limit 5
 podcast-cli youtube-search --channel "Lex Fridman" --since 30d
+podcast-cli youtube-search "Sam Altman" --limit 10 --with-meta
+podcast-cli youtube-search "Sam Altman" --with-meta --meta-concurrency 4 --meta-timeout 20
+
+# YouTube single-video metadata
+podcast-cli youtube-meta 5MWT_doo68k
+podcast-cli youtube-meta 5MWT_doo68k --output table
 
 # YouTube subtitles
 podcast-cli youtube-subtitles 5MWT_doo68k --lang en --output json
@@ -125,6 +132,21 @@ podcast-cli categories --output json
 
 - `--limit` range: `1..=100`
 - `recent --before` and `recent --since` must be integer Unix timestamps
+- `youtube-search --meta-concurrency` requires `--with-meta`; range: `1..=16`
+- `youtube-search --meta-timeout` requires `--with-meta`; range: `1..=120` seconds
+
+## YouTube Metadata Fields
+
+`youtube-meta` returns a stable JSON object with explicit nullable fields:
+
+- `video_id`, `title`, `channel`, `url`
+- `duration`, `upload_date`, `timestamp`
+- `view_count`, `like_count`, `comment_count`
+- `availability`
+
+For `youtube-search --with-meta`, the existing result shape is preserved and these fields are appended:
+`timestamp`, `view_count`, `like_count`, `comment_count`, `availability`.
+If metadata fetch fails for one item, those appended fields are returned as `null` for that item.
 
 ## Troubleshooting
 
@@ -146,4 +168,11 @@ podcast-cli config set --api-key "<key>" --api-secret "<secret>"
 
 ```bash
 curl -4 -v --connect-timeout 10 https://api.podcastindex.org
+```
+
+4. `yt-dlp` errors for YouTube commands
+
+```bash
+yt-dlp --version
+yt-dlp --skip-download --dump-single-json "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
 ```
