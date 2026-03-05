@@ -41,6 +41,7 @@ pub enum SubtitleOutputArg {
     Json,
     Text,
     Srt,
+    Md,
 }
 
 impl From<OutputArg> for OutputFormat {

@@ -115,6 +115,7 @@ pub async fn run(args: YoutubeSubtitlesArgs) -> Result<()> {
         SubtitleOutputArg::Json => to_pretty_json(&result)?,
         SubtitleOutputArg::Text => result.text.clone(),
         SubtitleOutputArg::Srt => render_srt(&result.segments),
+        SubtitleOutputArg::Md => render_markdown(&result),
     };
 
     println!("{rendered}");
@@ -615,6 +616,38 @@ fn format_srt_timestamp(total_ms: u64) -> String {
     let millis = total_ms % 1000;
 
     format!("{hours:02}:{minutes:02}:{seconds:02},{millis:03}")
+}
+
+fn format_timestamp(total_ms: u64) -> String {
+    let hours = total_ms / 3_600_000;
+    let minutes = (total_ms % 3_600_000) / 60_000;
+    let seconds = (total_ms % 60_000) / 1000;
+
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
+}
+
+fn render_markdown(result: &YoutubeSubtitlesResult) -> String {
+    let mut output = String::new();
+
+    // Title and metadata
+    output.push_str(&format!("# {}\n\n", result.title));
+    output.push_str(&format!("- **Video ID**: `{}`\n", result.video_id));
+    output.push_str(&format!("- **Language**: {}\n", result.language));
+    output.push_str(&format!("- **Segments**: {}\n\n", result.segment_count));
+    output.push_str("---\n\n");
+    output.push_str("## Transcript\n\n");
+
+    // Transcript with timestamps
+    for segment in &result.segments {
+        let timestamp = format_timestamp(segment.start_ms);
+        output.push_str(&format!("`[{}]` {}\n\n", timestamp, segment.text));
+    }
+
+    output
 }
 
 #[cfg(test)]
