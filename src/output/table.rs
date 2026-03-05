@@ -1,6 +1,7 @@
 use prettytable::{Cell, Row, Table};
 
 use crate::api::types::{Category, Episode, Podcast, Stats};
+use crate::commands::youtube_meta::YoutubeMetaItem;
 
 const CLIP: usize = 72;
 
@@ -179,6 +180,59 @@ pub fn render_stats(stats: &Stats) -> String {
     table.to_string()
 }
 
+pub fn render_youtube_meta(item: &YoutubeMetaItem) -> String {
+    let mut table = Table::new();
+    table.add_row(Row::new(vec![Cell::new("Field"), Cell::new("Value")]));
+    table.add_row(Row::new(vec![
+        Cell::new("Video ID"),
+        Cell::new(&item.video_id),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Title"),
+        Cell::new(&value_or_dash_opt(item.title.as_deref())),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Channel"),
+        Cell::new(&value_or_dash_opt(item.channel.as_deref())),
+    ]));
+    table.add_row(Row::new(vec![Cell::new("URL"), Cell::new(&item.url)]));
+    table.add_row(Row::new(vec![
+        Cell::new("Duration"),
+        Cell::new(
+            &item
+                .duration
+                .map(|seconds| format!("{seconds}s"))
+                .unwrap_or_else(|| "-".to_string()),
+        ),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Upload Date"),
+        Cell::new(&value_or_dash_opt(item.upload_date.as_deref())),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Timestamp"),
+        Cell::new(&option_i64(item.timestamp)),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Views"),
+        Cell::new(&option_u64(item.view_count)),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Likes"),
+        Cell::new(&option_u64(item.like_count)),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Comments"),
+        Cell::new(&option_u64(item.comment_count)),
+    ]));
+    table.add_row(Row::new(vec![
+        Cell::new("Availability"),
+        Cell::new(&value_or_dash_opt(item.availability.as_deref())),
+    ]));
+
+    table.to_string()
+}
+
 fn clip(value: &str) -> String {
     if value.chars().count() <= CLIP {
         return value_or_dash(value);
@@ -205,6 +259,12 @@ fn clip_optional(value: Option<&str>) -> String {
 }
 
 fn option_u64(value: Option<u64>) -> String {
+    value
+        .map(|raw| raw.to_string())
+        .unwrap_or_else(|| "-".to_string())
+}
+
+fn option_i64(value: Option<i64>) -> String {
     value
         .map(|raw| raw.to_string())
         .unwrap_or_else(|| "-".to_string())

@@ -20,6 +20,7 @@ pub enum Commands {
     Download(DownloadArgs),
     Transcribe(TranscribeArgs),
     YoutubeSubtitles(YoutubeSubtitlesArgs),
+    YoutubeMeta(YoutubeMetaArgs),
     YoutubeSearch(YoutubeSearchArgs),
     Trending(TrendingArgs),
     Recent(RecentArgs),
@@ -198,6 +199,14 @@ pub struct YoutubeSubtitlesArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct YoutubeMetaArgs {
+    #[arg(value_name = "video-id", value_parser = parse_youtube_video_id)]
+    pub video_id: String,
+    #[arg(long, value_enum)]
+    pub output: Option<OutputArg>,
+}
+
+#[derive(Debug, Args)]
 pub struct YoutubeSearchArgs {
     #[arg(value_name = "query", value_parser = parse_non_empty)]
     pub query: String,
@@ -207,6 +216,12 @@ pub struct YoutubeSearchArgs {
     pub channel: Option<String>,
     #[arg(long, value_name = "range", help = "Only include videos uploaded within range, e.g. 7d, 30d", value_parser = parse_youtube_since)]
     pub since: Option<String>,
+    #[arg(long, help = "Fetch metadata for each video result")]
+    pub with_meta: bool,
+    #[arg(long, value_name = "n", value_parser = parse_meta_concurrency)]
+    pub meta_concurrency: Option<u8>,
+    #[arg(long, value_name = "seconds", value_parser = parse_meta_timeout)]
+    pub meta_timeout: Option<u64>,
 }
 
 #[derive(Debug, Args)]
@@ -369,5 +384,29 @@ fn parse_youtube_video_id(value: &str) -> std::result::Result<String, String> {
         Ok(value.to_string())
     } else {
         Err("video-id must be 11 chars and use [A-Za-z0-9_-]".to_string())
+    }
+}
+
+fn parse_meta_concurrency(value: &str) -> std::result::Result<u8, String> {
+    let concurrency = value
+        .parse::<u8>()
+        .map_err(|_| "meta-concurrency must be an integer in range 1..=16".to_string())?;
+
+    if (1..=16).contains(&concurrency) {
+        Ok(concurrency)
+    } else {
+        Err("meta-concurrency must be in range 1..=16".to_string())
+    }
+}
+
+fn parse_meta_timeout(value: &str) -> std::result::Result<u64, String> {
+    let timeout = value
+        .parse::<u64>()
+        .map_err(|_| "meta-timeout must be an integer in range 1..=120".to_string())?;
+
+    if (1..=120).contains(&timeout) {
+        Ok(timeout)
+    } else {
+        Err("meta-timeout must be in range 1..=120".to_string())
     }
 }

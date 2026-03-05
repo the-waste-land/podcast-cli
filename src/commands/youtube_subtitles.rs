@@ -5,10 +5,9 @@ use std::process::Command;
 use serde::{Deserialize, Serialize};
 
 use crate::cli::{SubtitleOutputArg, YoutubeSubtitlesArgs};
+use crate::commands::youtube_meta::YT_DLP_BINARY;
 use crate::error::{PodcastCliError, Result};
 use crate::output::json::to_pretty_json;
-
-const YT_DLP_BINARY: &str = "yt-dlp";
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub struct SubtitleSegment {

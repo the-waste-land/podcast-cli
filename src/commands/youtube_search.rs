@@ -1,14 +1,22 @@
 use std::io::ErrorKind;
 use std::process::Command;
+use std::sync::Arc;
+use std::time::Duration;
 
 use serde::Serialize;
+use tokio::sync::Semaphore;
+use tokio::task::JoinSet;
 
 use crate::cli::YoutubeSearchArgs;
+use crate::commands::youtube_meta::{
+    ensure_yt_dlp_available, fetch_meta_by_video_id_with_timeout, YT_DLP_BINARY,
+};
 use crate::error::{PodcastCliError, Result};
 use crate::output::json::to_pretty_json;
 
-const YT_DLP_BINARY: &str = "yt-dlp";
 const YT_DLP_PRINT_TEMPLATE: &str = "%(id)s\t%(title)s\t%(channel)s\t%(duration)s\t%(upload_date)s";
+const DEFAULT_META_CONCURRENCY: u8 = 2;
+const DEFAULT_META_TIMEOUT_SECONDS: u64 = 15;
 
 #[derive(Debug, Serialize, Clone, PartialEq, Eq)]
 pub struct YoutubeSearchItem {
@@ -18,6 +26,32 @@ pub struct YoutubeSearchItem {
     pub duration: Option<u64>,
     pub upload_date: Option<String>,
     pub url: String,
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+pub struct YoutubeSearchItemWithMeta {
+    pub video_id: String,
+    pub title: String,
+    pub channel: String,
+    pub duration: Option<u64>,
+    pub upload_date: Option<String>,
+    pub url: String,
+    pub timestamp: Option<i64>,
+    pub view_count: Option<u64>,
+    pub like_count: Option<u64>,
+    pub comment_count: Option<u64>,
+    pub availability: Option<String>,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct YoutubeSearchMetaFields {
+    duration: Option<u64>,
+    upload_date: Option<String>,
+    timestamp: Option<i64>,
+    view_count: Option<u64>,
+    like_count: Option<u64>,
+    comment_count: Option<u64>,
+    availability: Option<String>,
 }
 
 pub async fn run(args: YoutubeSearchArgs) -> Result<()> {
@@ -41,30 +75,16 @@ pub async fn run(args: YoutubeSearchArgs) -> Result<()> {
 
     items.truncate(limit as usize);
 
-    println!("{}", to_pretty_json(&items)?);
-    Ok(())
-}
-
-fn ensure_yt_dlp_available() -> Result<()> {
-    match Command::new(YT_DLP_BINARY).arg("--version").output() {
-        Ok(output) if output.status.success() => Ok(()),
-        Ok(output) => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            let message = if stderr.trim().is_empty() {
-                "yt-dlp is installed but not executable".to_string()
-            } else {
-                format!(
-                    "yt-dlp is installed but unavailable: {}",
-                    stderr.trim().replace('\n', " ")
-                )
-            };
-            Err(PodcastCliError::Config(message))
-        }
-        Err(err) if err.kind() == ErrorKind::NotFound => Err(PodcastCliError::Config(
-            "yt-dlp not found in PATH; install yt-dlp first".to_string(),
-        )),
-        Err(err) => Err(PodcastCliError::Io(err)),
+    if should_fetch_meta(&args) {
+        let concurrency = args.meta_concurrency.unwrap_or(DEFAULT_META_CONCURRENCY) as usize;
+        let timeout_seconds = args.meta_timeout.unwrap_or(DEFAULT_META_TIMEOUT_SECONDS);
+        let enriched = enrich_items_with_meta(items, concurrency, timeout_seconds).await;
+        println!("{}", to_pretty_json(&enriched)?);
+    } else {
+        println!("{}", to_pretty_json(&items)?);
     }
+
+    Ok(())
 }
 
 fn validate_limit(limit: u32) -> Result<()> {
@@ -74,6 +94,82 @@ fn validate_limit(limit: u32) -> Result<()> {
         Err(PodcastCliError::Validation(
             "limit must be in range 1..=100".to_string(),
         ))
+    }
+}
+
+fn should_fetch_meta(args: &YoutubeSearchArgs) -> bool {
+    args.with_meta || args.meta_concurrency.is_some() || args.meta_timeout.is_some()
+}
+
+async fn enrich_items_with_meta(
+    items: Vec<YoutubeSearchItem>,
+    concurrency: usize,
+    timeout_seconds: u64,
+) -> Vec<YoutubeSearchItemWithMeta> {
+    if items.is_empty() {
+        return Vec::new();
+    }
+
+    let semaphore = Arc::new(Semaphore::new(concurrency.max(1)));
+    let mut join_set = JoinSet::new();
+
+    for (index, item) in items.iter().enumerate() {
+        let semaphore = Arc::clone(&semaphore);
+        let video_id = item.video_id.clone();
+        join_set.spawn(async move {
+            // Keep permit alive for the full task to enforce concurrency limit.
+            let _permit = semaphore
+                .acquire_owned()
+                .await
+                .expect("semaphore should remain available while tasks run");
+            let meta = fetch_meta_by_video_id_with_timeout(
+                &video_id,
+                Some(Duration::from_secs(timeout_seconds)),
+            )
+            .await
+            .ok()
+            .map(YoutubeSearchMetaFields::from_meta)
+            .unwrap_or_default();
+
+            (index, meta)
+        });
+    }
+
+    let mut meta_by_index = vec![YoutubeSearchMetaFields::default(); items.len()];
+    while let Some(join_result) = join_set.join_next().await {
+        if let Ok((index, meta)) = join_result {
+            if index < meta_by_index.len() {
+                meta_by_index[index] = meta;
+            }
+        }
+    }
+
+    items
+        .into_iter()
+        .enumerate()
+        .map(|(index, item)| {
+            let meta = meta_by_index.get(index).cloned().unwrap_or_default();
+            merge_item_with_meta(item, meta)
+        })
+        .collect()
+}
+
+fn merge_item_with_meta(
+    item: YoutubeSearchItem,
+    meta: YoutubeSearchMetaFields,
+) -> YoutubeSearchItemWithMeta {
+    YoutubeSearchItemWithMeta {
+        video_id: item.video_id,
+        title: item.title,
+        channel: item.channel,
+        duration: meta.duration.or(item.duration),
+        upload_date: meta.upload_date.or(item.upload_date),
+        url: item.url,
+        timestamp: meta.timestamp,
+        view_count: meta.view_count,
+        like_count: meta.like_count,
+        comment_count: meta.comment_count,
+        availability: meta.availability,
     }
 }
 
@@ -170,9 +266,26 @@ fn normalize_upload_date(raw: &str) -> Option<String> {
     Some(raw.to_string())
 }
 
+impl YoutubeSearchMetaFields {
+    fn from_meta(item: crate::commands::youtube_meta::YoutubeMetaItem) -> Self {
+        Self {
+            duration: item.duration,
+            upload_date: item.upload_date,
+            timestamp: item.timestamp,
+            view_count: item.view_count,
+            like_count: item.like_count,
+            comment_count: item.comment_count,
+            availability: item.availability,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{normalize_upload_date, parse_row, requested_fetch_limit};
+    use super::{
+        merge_item_with_meta, normalize_upload_date, parse_row, requested_fetch_limit,
+        YoutubeSearchItem, YoutubeSearchMetaFields,
+    };
 
     #[test]
     fn parse_row_to_item() {
@@ -210,5 +323,48 @@ mod tests {
         assert_eq!(requested_fetch_limit(10, false), 10);
         assert_eq!(requested_fetch_limit(10, true), 30);
         assert_eq!(requested_fetch_limit(100, true), 200);
+    }
+
+    #[test]
+    fn merge_item_with_meta_prefers_meta_duration_and_upload_date() {
+        let item = YoutubeSearchItem {
+            video_id: "abc123def45".to_string(),
+            title: "Title".to_string(),
+            channel: "Channel".to_string(),
+            duration: Some(30),
+            upload_date: Some("2020-01-01".to_string()),
+            url: "https://www.youtube.com/watch?v=abc123def45".to_string(),
+        };
+        let meta = YoutubeSearchMetaFields {
+            duration: Some(120),
+            upload_date: Some("2026-03-01".to_string()),
+            timestamp: Some(1_772_380_800),
+            view_count: Some(1_000),
+            like_count: Some(100),
+            comment_count: Some(10),
+            availability: Some("public".to_string()),
+        };
+
+        let merged = merge_item_with_meta(item, meta);
+        assert_eq!(merged.duration, Some(120));
+        assert_eq!(merged.upload_date.as_deref(), Some("2026-03-01"));
+        assert_eq!(merged.view_count, Some(1_000));
+    }
+
+    #[test]
+    fn merge_item_with_meta_preserves_search_fields_when_meta_missing() {
+        let item = YoutubeSearchItem {
+            video_id: "abc123def45".to_string(),
+            title: "Title".to_string(),
+            channel: "Channel".to_string(),
+            duration: Some(30),
+            upload_date: Some("2020-01-01".to_string()),
+            url: "https://www.youtube.com/watch?v=abc123def45".to_string(),
+        };
+
+        let merged = merge_item_with_meta(item, YoutubeSearchMetaFields::default());
+        assert_eq!(merged.duration, Some(30));
+        assert_eq!(merged.upload_date.as_deref(), Some("2020-01-01"));
+        assert_eq!(merged.view_count, None);
     }
 }
