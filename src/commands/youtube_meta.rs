@@ -95,24 +95,35 @@ pub async fn fetch_meta_by_video_id_with_timeout(
         .arg(url);
 
     let output = match timeout {
-        Some(duration) => match tokio::time::timeout(duration, command.output()).await {
-            Ok(output) => output,
-            Err(_) => {
-                return Err(PodcastCliError::Api(format!(
-                    "yt-dlp metadata request timed out for video-id `{video_id}` after {}s",
-                    duration.as_secs()
-                )))
+        Some(duration) => {
+            let child = command.spawn().map_err(|err| {
+                if err.kind() == ErrorKind::NotFound {
+                    PodcastCliError::Config("yt-dlp not found in PATH; install yt-dlp first".to_string())
+                } else {
+                    PodcastCliError::Io(err)
+                }
+            })?;
+            match tokio::time::timeout(duration, child.wait_with_output()).await {
+                Ok(Ok(output)) => output,
+                Ok(Err(err)) => {
+                    return Err(PodcastCliError::Io(err));
+                }
+                Err(_) => {
+                    return Err(PodcastCliError::Api(format!(
+                        "yt-dlp metadata request timed out for video-id `{video_id}` after {}s",
+                        duration.as_secs()
+                    )));
+                }
             }
-        },
-        None => command.output().await,
-    }
-    .map_err(|err| {
-        if err.kind() == ErrorKind::NotFound {
-            PodcastCliError::Config("yt-dlp not found in PATH; install yt-dlp first".to_string())
-        } else {
-            PodcastCliError::Io(err)
         }
-    })?;
+        None => command.output().await.map_err(|err| {
+            if err.kind() == ErrorKind::NotFound {
+                PodcastCliError::Config("yt-dlp not found in PATH; install yt-dlp first".to_string())
+            } else {
+                PodcastCliError::Io(err)
+            }
+        })?,
+    };
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();

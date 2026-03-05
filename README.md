@@ -76,7 +76,7 @@ podcast-cli stats
 | `stats` | Platform metrics | `--output` |
 | `config set/show/clear` | Manage local config | `--api-key` `--api-secret` `--default-output` `--max-results` |
 | `youtube-search <query>` | Search YouTube videos | `--limit` `--channel` `--since` `--with-meta` `--meta-concurrency` `--meta-timeout` |
-| `youtube-meta <video-id>` | Fetch YouTube metadata for a single video | `--output <json|table>` |
+| `youtube-meta <video-id>` | Fetch YouTube metadata for a single video | `--output <json&#124;table>` |
 | `youtube-subtitles <video-id>` | Download YouTube subtitles | `--lang` `--output` |
 
 ## Output Modes

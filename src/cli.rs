@@ -218,9 +218,9 @@ pub struct YoutubeSearchArgs {
     pub since: Option<String>,
     #[arg(long, help = "Fetch metadata for each video result")]
     pub with_meta: bool,
-    #[arg(long, value_name = "n", value_parser = parse_meta_concurrency)]
+    #[arg(long, value_name = "n", value_parser = parse_meta_concurrency, requires = "with_meta", help = "Concurrency for metadata fetching (requires --with-meta)")]
     pub meta_concurrency: Option<u8>,
-    #[arg(long, value_name = "seconds", value_parser = parse_meta_timeout)]
+    #[arg(long, value_name = "seconds", value_parser = parse_meta_timeout, requires = "with_meta", help = "Timeout for metadata fetching in seconds (requires --with-meta)")]
     pub meta_timeout: Option<u64>,
 }
 
