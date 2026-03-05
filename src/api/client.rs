@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::Proxy;
 use serde::de::DeserializeOwned;
 use sha1::{Digest, Sha1};
 
@@ -8,6 +9,59 @@ use crate::error::{PodcastCliError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.podcastindex.org/api/1.0";
 const USER_AGENT_VALUE: &str = "podcast-cli/0.1";
+
+fn build_http_client() -> reqwest::Client {
+    let mut builder = reqwest::Client::builder();
+
+    // Read proxy from environment variables
+    // Use ALL_PROXY for all schemes, or HTTPS_PROXY/HTTP_PROXY individually
+    if let Some(all_proxy) = get_env_proxy("ALL_PROXY").or_else(|| get_env_proxy("all_proxy")) {
+        match Proxy::all(&all_proxy) {
+            Ok(proxy) => {
+                builder = builder.proxy(proxy);
+            }
+            Err(e) => {
+                eprintln!("Warning: failed to parse ALL_PROXY: {}", e);
+            }
+        }
+    } else {
+        // Try HTTPS_PROXY for HTTPS requests
+        if let Some(https_proxy) = get_env_proxy("HTTPS_PROXY").or_else(|| get_env_proxy("https_proxy")) {
+            match Proxy::https(&https_proxy) {
+                Ok(proxy) => {
+                    builder = builder.proxy(proxy);
+                }
+                Err(e) => {
+                    eprintln!("Warning: failed to parse HTTPS_PROXY: {}", e);
+                }
+            }
+        }
+        // Try HTTP_PROXY for HTTP requests
+        if let Some(http_proxy) = get_env_proxy("HTTP_PROXY").or_else(|| get_env_proxy("http_proxy")) {
+            match Proxy::http(&http_proxy) {
+                Ok(proxy) => {
+                    builder = builder.proxy(proxy);
+                }
+                Err(e) => {
+                    eprintln!("Warning: failed to parse HTTP_PROXY: {}", e);
+                }
+            }
+        }
+    }
+
+    match builder.build() {
+        Ok(client) => client,
+        Err(e) => {
+            eprintln!("Warning: failed to build HTTP client with proxy, falling back to default: {}", e);
+            reqwest::Client::new()
+        }
+    }
+}
+
+/// Get proxy URL from environment variable, filtering empty values
+fn get_env_proxy(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.trim().is_empty())
+}
 
 #[derive(Debug, Clone)]
 pub struct PodcastIndexClient {
@@ -27,8 +81,9 @@ impl PodcastIndexClient {
         api_secret: impl Into<String>,
         base_url: impl Into<String>,
     ) -> Self {
+        let http = build_http_client();
         Self {
-            http: reqwest::Client::new(),
+            http,
             base_url: base_url.into(),
             api_key: api_key.into(),
             api_secret: api_secret.into(),
