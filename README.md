@@ -132,8 +132,8 @@ podcast-cli categories --output json
 
 - `--limit` range: `1..=100`
 - `recent --before` and `recent --since` must be integer Unix timestamps
-- `youtube-search --meta-concurrency` range: `1..=16`
-- `youtube-search --meta-timeout` range: `1..=120` seconds
+- `youtube-search --meta-concurrency` requires `--with-meta`; range: `1..=16`
+- `youtube-search --meta-timeout` requires `--with-meta`; range: `1..=120` seconds
 
 ## YouTube Metadata Fields
 
