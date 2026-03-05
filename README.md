@@ -4,39 +4,28 @@ Rust CLI for [Podcast Index API](https://podcastindex-org.github.io/docs-api/), 
 
 - `table` output for human reading
 - `json` output for scripts/AI agents
+- YouTube video search and subtitle download
+- Podcast episode download and transcription
 
 ## Prerequisites
 
 - Rust toolchain (`cargo`)
 - Podcast Index credentials: `api_key` and `api_secret`
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) (for YouTube features)
+- [ffmpeg](https://ffmpeg.org/) (for audio processing)
+- [OpenAI Whisper](https://github.com/openai/whisper) (for transcription)
 
 ## Install
 
-1. Build locally:
+```bash
+cargo install --git https://github.com/the-waste-land/podcast-cli.git --tag v0.2.1
+```
+
+Or build locally:
 
 ```bash
 cargo build --release
-```
-
-2. Install to `~/.cargo/bin`:
-
-```bash
 cargo install --path . --force
-```
-
-3. Ensure PATH contains cargo bin:
-
-```bash
-echo 'export PATH="$HOME/.cargo/bin:$PATH"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-4. Verify:
-
-```bash
-podcast-cli --version
-podcast-cli --help
 ```
 
 ## Configure API Credentials
@@ -49,11 +38,17 @@ podcast-cli config set \
   --max-results 10
 ```
 
-Check config:
+## Proxy Configuration
+
+If you need a proxy to access the Podcast Index API:
 
 ```bash
-podcast-cli config show
+export HTTP_PROXY=http://127.0.0.1:7890
+export HTTPS_PROXY=http://127.0.0.1:7890
+# or ALL_PROXY for all protocols
 ```
+
+Supported env vars: `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY` (and lowercase variants)
 
 ## Quick Start
 
@@ -73,6 +68,8 @@ podcast-cli stats
 | `show <feed-id>` | Show podcast details by id | `--url` `--output` |
 | `episodes <feed-id>` | List episodes under a feed | `--limit` `--output` |
 | `episode <episode-id>` | Show episode details | `--output` |
+| `download <episode-id>` | Download episode audio | `--dest` |
+| `transcribe <audio-file>` | Transcribe audio with Whisper | `--model` `--language` |
 | `trending` | Trending podcasts | `--episodes` `--lang` `--limit` `--output` |
 | `recent` | Recent updates | `--feeds` `--before` `--since` `--limit` `--output` |
 | `categories` | Category list | `--output` |
@@ -89,27 +86,39 @@ podcast-cli stats
 ## Examples
 
 ```bash
-# Recent episodes
-podcast-cli recent --limit 10
+# Search podcasts
+podcast-cli search "Sam Altman" --limit 5
 
-# Recent feeds since Unix timestamp
-podcast-cli recent --feeds --since 1700000000 --output json
+# Show podcast details
+podcast-cli show 6023552
 
-# Categories in JSON
-podcast-cli categories --output json
+# List episodes
+podcast-cli episodes 6023552 --limit 10
 
-# Stats in JSON
-podcast-cli stats --output json
+# Download episode audio
+podcast-cli download 51062882089 --dest ./episode.mp3
+
+# Transcribe audio (requires Whisper)
+podcast-cli transcribe ./episode.mp3 --language en
 
 # YouTube search
 podcast-cli youtube-search "Sam Altman" --limit 5
 podcast-cli youtube-search --channel "Lex Fridman" --since 30d
 
-# YouTube subtitles (JSON output)
+# YouTube subtitles
 podcast-cli youtube-subtitles 5MWT_doo68k --lang en --output json
-
-# YouTube subtitles (SRT format)
 podcast-cli youtube-subtitles 5MWT_doo68k --lang en --output srt
+
+# Trending and recent
+podcast-cli trending --limit 10
+podcast-cli recent --limit 10
+podcast-cli recent --feeds --since 1700000000 --output json
+
+# Stats
+podcast-cli stats --output json
+
+# Categories
+podcast-cli categories --output json
 ```
 
 ## Validation Rules
