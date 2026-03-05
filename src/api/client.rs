@@ -14,13 +14,37 @@ fn build_http_client() -> reqwest::Client {
     let mut builder = reqwest::Client::builder();
 
     // Read proxy from environment variables
-    if let Some(proxy_url) = get_proxy_url() {
-        match Proxy::all(&proxy_url) {
+    // Use ALL_PROXY for all schemes, or HTTPS_PROXY/HTTP_PROXY individually
+    if let Some(all_proxy) = get_env_proxy("ALL_PROXY").or_else(|| get_env_proxy("all_proxy")) {
+        match Proxy::all(&all_proxy) {
             Ok(proxy) => {
                 builder = builder.proxy(proxy);
             }
             Err(e) => {
-                eprintln!("Warning: failed to parse proxy URL '{}': {}", proxy_url, e);
+                eprintln!("Warning: failed to parse ALL_PROXY: {}", e);
+            }
+        }
+    } else {
+        // Try HTTPS_PROXY for HTTPS requests
+        if let Some(https_proxy) = get_env_proxy("HTTPS_PROXY").or_else(|| get_env_proxy("https_proxy")) {
+            match Proxy::https(&https_proxy) {
+                Ok(proxy) => {
+                    builder = builder.proxy(proxy);
+                }
+                Err(e) => {
+                    eprintln!("Warning: failed to parse HTTPS_PROXY: {}", e);
+                }
+            }
+        }
+        // Try HTTP_PROXY for HTTP requests
+        if let Some(http_proxy) = get_env_proxy("HTTP_PROXY").or_else(|| get_env_proxy("http_proxy")) {
+            match Proxy::http(&http_proxy) {
+                Ok(proxy) => {
+                    builder = builder.proxy(proxy);
+                }
+                Err(e) => {
+                    eprintln!("Warning: failed to parse HTTP_PROXY: {}", e);
+                }
             }
         }
     }
@@ -34,12 +58,9 @@ fn build_http_client() -> reqwest::Client {
     }
 }
 
-fn get_proxy_url() -> Option<String> {
-    // Priority: ALL_PROXY > HTTPS_PROXY > HTTP_PROXY
-    std::env::var("ALL_PROXY")
-        .or_else(|_| std::env::var("HTTPS_PROXY"))
-        .or_else(|_| std::env::var("HTTP_PROXY"))
-        .ok()
+/// Get proxy URL from environment variable, filtering empty values
+fn get_env_proxy(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.trim().is_empty())
 }
 
 #[derive(Debug, Clone)]
