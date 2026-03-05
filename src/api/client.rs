@@ -1,6 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::Proxy;
 use serde::de::DeserializeOwned;
 use sha1::{Digest, Sha1};
 
@@ -8,6 +9,38 @@ use crate::error::{PodcastCliError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.podcastindex.org/api/1.0";
 const USER_AGENT_VALUE: &str = "podcast-cli/0.1";
+
+fn build_http_client() -> reqwest::Client {
+    let mut builder = reqwest::Client::builder();
+
+    // Read proxy from environment variables
+    if let Some(proxy_url) = get_proxy_url() {
+        match Proxy::all(&proxy_url) {
+            Ok(proxy) => {
+                builder = builder.proxy(proxy);
+            }
+            Err(e) => {
+                eprintln!("Warning: failed to parse proxy URL '{}': {}", proxy_url, e);
+            }
+        }
+    }
+
+    match builder.build() {
+        Ok(client) => client,
+        Err(e) => {
+            eprintln!("Warning: failed to build HTTP client with proxy, falling back to default: {}", e);
+            reqwest::Client::new()
+        }
+    }
+}
+
+fn get_proxy_url() -> Option<String> {
+    // Priority: ALL_PROXY > HTTPS_PROXY > HTTP_PROXY
+    std::env::var("ALL_PROXY")
+        .or_else(|_| std::env::var("HTTPS_PROXY"))
+        .or_else(|_| std::env::var("HTTP_PROXY"))
+        .ok()
+}
 
 #[derive(Debug, Clone)]
 pub struct PodcastIndexClient {
@@ -27,8 +60,9 @@ impl PodcastIndexClient {
         api_secret: impl Into<String>,
         base_url: impl Into<String>,
     ) -> Self {
+        let http = build_http_client();
         Self {
-            http: reqwest::Client::new(),
+            http,
             base_url: base_url.into(),
             api_key: api_key.into(),
             api_secret: api_secret.into(),
