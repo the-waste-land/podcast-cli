@@ -14,6 +14,7 @@ fn parse_youtube_search_defaults() {
             assert!(!args.with_meta);
             assert_eq!(args.meta_concurrency, None);
             assert_eq!(args.meta_timeout, None);
+            assert!(!args.json_envelope);
         }
         _ => panic!("expected youtube-search command"),
     }
@@ -42,6 +43,7 @@ fn parse_youtube_search_with_filters() {
             assert!(!args.with_meta);
             assert_eq!(args.meta_concurrency, None);
             assert_eq!(args.meta_timeout, None);
+            assert!(!args.json_envelope);
         }
         _ => panic!("expected youtube-search command"),
     }
@@ -68,6 +70,7 @@ fn parse_youtube_search_with_meta_options() {
         "4",
         "--meta-timeout",
         "20",
+        "--json-envelope",
     ]);
 
     match cli.command {
@@ -75,6 +78,22 @@ fn parse_youtube_search_with_meta_options() {
             assert!(args.with_meta);
             assert_eq!(args.meta_concurrency, Some(4));
             assert_eq!(args.meta_timeout, Some(20));
+            assert!(args.json_envelope);
+        }
+        _ => panic!("expected youtube-search command"),
+    }
+}
+
+#[test]
+fn parse_youtube_search_with_envelope_only() {
+    let cli = Cli::parse_from(["podcast", "youtube-search", "rust", "--json-envelope"]);
+
+    match cli.command {
+        Commands::YoutubeSearch(args) => {
+            assert!(!args.with_meta);
+            assert_eq!(args.meta_concurrency, None);
+            assert_eq!(args.meta_timeout, None);
+            assert!(args.json_envelope);
         }
         _ => panic!("expected youtube-search command"),
     }

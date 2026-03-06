@@ -75,7 +75,7 @@ podcast-cli stats
 | `categories` | Category list | `--output` |
 | `stats` | Platform metrics | `--output` |
 | `config set/show/clear` | Manage local config | `--api-key` `--api-secret` `--default-output` `--max-results` |
-| `youtube-search <query>` | Search YouTube videos | `--limit` `--channel` `--since` `--with-meta` `--meta-concurrency` `--meta-timeout` |
+| `youtube-search <query>` | Search YouTube videos | `--limit` `--channel` `--since` `--with-meta` `--meta-concurrency` `--meta-timeout` `--json-envelope` |
 | `youtube-meta <video-id>` | Fetch YouTube metadata for a single video | `--output <json&#124;table>` |
 | `youtube-subtitles <video-id>` | Download YouTube subtitles | `--lang` `--output` |
 
@@ -107,6 +107,7 @@ podcast-cli youtube-search "Sam Altman" --limit 5
 podcast-cli youtube-search --channel "Lex Fridman" --since 30d
 podcast-cli youtube-search "Sam Altman" --limit 10 --with-meta
 podcast-cli youtube-search "Sam Altman" --with-meta --meta-concurrency 4 --meta-timeout 20
+podcast-cli youtube-search "Sam Altman" --with-meta --json-envelope
 
 # YouTube single-video metadata
 podcast-cli youtube-meta 5MWT_doo68k
@@ -145,8 +146,53 @@ podcast-cli categories --output json
 - `availability`
 
 For `youtube-search --with-meta`, the existing result shape is preserved and these fields are appended:
-`timestamp`, `view_count`, `like_count`, `comment_count`, `availability`.
-If metadata fetch fails for one item, those appended fields are returned as `null` for that item.
+`timestamp`, `view_count`, `like_count`, `comment_count`, `availability`, `meta_status`.
+If metadata fetch fails for one item, those appended fields are returned as `null` for that item and `meta_status` is set to `failed` or `timeout`.
+
+`meta_status` values:
+
+- `ok`: metadata fetched successfully
+- `failed`: metadata fetch failed (non-timeout error)
+- `timeout`: metadata fetch timed out
+- `skipped`: fallback status when metadata is skipped
+
+## YouTube Search JSON Shapes
+
+Default mode returns a JSON array (backward-compatible):
+
+```json
+[
+  {
+    "video_id": "...",
+    "title": "...",
+    "channel": "...",
+    "duration": 3600,
+    "upload_date": "2026-03-05",
+    "url": "https://www.youtube.com/watch?v=..."
+  }
+]
+```
+
+Envelope mode (`--json-envelope`) returns an object:
+
+```json
+{
+  "query": "AI interview",
+  "items": [],
+  "meta": {
+    "searched": 20,
+    "with_meta": true,
+    "meta_success": 18,
+    "meta_failed": 1,
+    "meta_timeout": 1
+  }
+}
+```
+
+`upload_date` normalization in YouTube outputs:
+
+- empty string / whitespace / `NA` / `null` => `null`
+- `YYYYMMDD` => `YYYY-MM-DD`
 
 ## Troubleshooting
 
