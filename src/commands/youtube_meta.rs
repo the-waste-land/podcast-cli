@@ -98,7 +98,9 @@ pub async fn fetch_meta_by_video_id_with_timeout(
         Some(duration) => {
             let child = command.spawn().map_err(|err| {
                 if err.kind() == ErrorKind::NotFound {
-                    PodcastCliError::Config("yt-dlp not found in PATH; install yt-dlp first".to_string())
+                    PodcastCliError::Config(
+                        "yt-dlp not found in PATH; install yt-dlp first".to_string(),
+                    )
                 } else {
                     PodcastCliError::Io(err)
                 }
@@ -118,7 +120,9 @@ pub async fn fetch_meta_by_video_id_with_timeout(
         }
         None => command.output().await.map_err(|err| {
             if err.kind() == ErrorKind::NotFound {
-                PodcastCliError::Config("yt-dlp not found in PATH; install yt-dlp first".to_string())
+                PodcastCliError::Config(
+                    "yt-dlp not found in PATH; install yt-dlp first".to_string(),
+                )
             } else {
                 PodcastCliError::Io(err)
             }
@@ -168,6 +172,10 @@ fn normalize_upload_date(raw: Option<&str>) -> Option<String> {
         return None;
     }
 
+    if trimmed.eq_ignore_ascii_case("na") || trimmed.eq_ignore_ascii_case("null") {
+        return None;
+    }
+
     if trimmed.len() == 8 && trimmed.chars().all(|ch| ch.is_ascii_digit()) {
         return Some(format!(
             "{}-{}-{}",
@@ -209,6 +217,10 @@ mod tests {
             Some("2026-03-01")
         );
         assert_eq!(normalize_upload_date(Some("  ")), None);
+        assert_eq!(normalize_upload_date(Some("NA")), None);
+        assert_eq!(normalize_upload_date(Some("na")), None);
+        assert_eq!(normalize_upload_date(Some("null")), None);
+        assert_eq!(normalize_upload_date(Some("NULL")), None);
         assert_eq!(normalize_upload_date(None), None);
     }
 

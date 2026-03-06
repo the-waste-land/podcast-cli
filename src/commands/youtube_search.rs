@@ -41,6 +41,23 @@ pub struct YoutubeSearchItemWithMeta {
     pub like_count: Option<u64>,
     pub comment_count: Option<u64>,
     pub availability: Option<String>,
+    pub meta_status: MetaStatus,
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+struct YoutubeSearchEnvelope<T> {
+    query: String,
+    items: Vec<T>,
+    meta: YoutubeSearchEnvelopeMeta,
+}
+
+#[derive(Debug, Serialize, Clone, PartialEq, Eq)]
+pub struct YoutubeSearchEnvelopeMeta {
+    searched: usize,
+    with_meta: bool,
+    meta_success: usize,
+    meta_failed: usize,
+    meta_timeout: usize,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -52,6 +69,22 @@ struct YoutubeSearchMetaFields {
     like_count: Option<u64>,
     comment_count: Option<u64>,
     availability: Option<String>,
+}
+
+#[derive(Debug, Serialize, Clone, Copy, PartialEq, Eq, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum MetaStatus {
+    Ok,
+    Failed,
+    Timeout,
+    #[default]
+    Skipped,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+struct MetaFetchOutcome {
+    fields: YoutubeSearchMetaFields,
+    status: MetaStatus,
 }
 
 pub async fn run(args: YoutubeSearchArgs) -> Result<()> {
@@ -79,9 +112,35 @@ pub async fn run(args: YoutubeSearchArgs) -> Result<()> {
         let concurrency = args.meta_concurrency.unwrap_or(DEFAULT_META_CONCURRENCY) as usize;
         let timeout_seconds = args.meta_timeout.unwrap_or(DEFAULT_META_TIMEOUT_SECONDS);
         let enriched = enrich_items_with_meta(items, concurrency, timeout_seconds).await;
-        println!("{}", to_pretty_json(&enriched)?);
+        if args.json_envelope {
+            let searched = enriched.len();
+            let envelope = YoutubeSearchEnvelope {
+                query: args.query,
+                meta: summarize_meta_statuses(searched, &enriched),
+                items: enriched,
+            };
+            println!("{}", to_pretty_json(&envelope)?);
+        } else {
+            println!("{}", to_pretty_json(&enriched)?);
+        }
     } else {
-        println!("{}", to_pretty_json(&items)?);
+        if args.json_envelope {
+            let searched = items.len();
+            let envelope = YoutubeSearchEnvelope {
+                query: args.query,
+                meta: YoutubeSearchEnvelopeMeta {
+                    searched,
+                    with_meta: false,
+                    meta_success: 0,
+                    meta_failed: 0,
+                    meta_timeout: 0,
+                },
+                items,
+            };
+            println!("{}", to_pretty_json(&envelope)?);
+        } else {
+            println!("{}", to_pretty_json(&items)?);
+        }
     }
 
     Ok(())
@@ -98,7 +157,7 @@ fn validate_limit(limit: u32) -> Result<()> {
 }
 
 fn should_fetch_meta(args: &YoutubeSearchArgs) -> bool {
-    args.with_meta || args.meta_concurrency.is_some() || args.meta_timeout.is_some()
+    args.with_meta
 }
 
 async fn enrich_items_with_meta(
@@ -118,28 +177,49 @@ async fn enrich_items_with_meta(
         let video_id = item.video_id.clone();
         join_set.spawn(async move {
             // Keep permit alive for the full task to enforce concurrency limit.
-            let _permit = semaphore
-                .acquire_owned()
-                .await
-                .expect("semaphore should remain available while tasks run");
-            let meta = fetch_meta_by_video_id_with_timeout(
+            let _permit = match semaphore.acquire_owned().await {
+                Ok(permit) => permit,
+                Err(_) => {
+                    return (
+                        index,
+                        MetaFetchOutcome {
+                            fields: YoutubeSearchMetaFields::default(),
+                            status: MetaStatus::Failed,
+                        },
+                    );
+                }
+            };
+            let outcome = match fetch_meta_by_video_id_with_timeout(
                 &video_id,
                 Some(Duration::from_secs(timeout_seconds)),
             )
             .await
-            .ok()
-            .map(YoutubeSearchMetaFields::from_meta)
-            .unwrap_or_default();
+            {
+                Ok(meta) => MetaFetchOutcome {
+                    fields: YoutubeSearchMetaFields::from_meta(meta),
+                    status: MetaStatus::Ok,
+                },
+                Err(err) => MetaFetchOutcome {
+                    fields: YoutubeSearchMetaFields::default(),
+                    status: meta_status_for_error(&err),
+                },
+            };
 
-            (index, meta)
+            (index, outcome)
         });
     }
 
-    let mut meta_by_index = vec![YoutubeSearchMetaFields::default(); items.len()];
+    let mut outcomes_by_index = vec![
+        MetaFetchOutcome {
+            fields: YoutubeSearchMetaFields::default(),
+            status: MetaStatus::Failed,
+        };
+        items.len()
+    ];
     while let Some(join_result) = join_set.join_next().await {
-        if let Ok((index, meta)) = join_result {
-            if index < meta_by_index.len() {
-                meta_by_index[index] = meta;
+        if let Ok((index, outcome)) = join_result {
+            if index < outcomes_by_index.len() {
+                outcomes_by_index[index] = outcome;
             }
         }
     }
@@ -148,16 +228,20 @@ async fn enrich_items_with_meta(
         .into_iter()
         .enumerate()
         .map(|(index, item)| {
-            let meta = meta_by_index.get(index).cloned().unwrap_or_default();
-            merge_item_with_meta(item, meta)
+            let outcome = outcomes_by_index.get(index).cloned().unwrap_or_default();
+            merge_item_with_meta(item, outcome)
         })
         .collect()
 }
 
 fn merge_item_with_meta(
     item: YoutubeSearchItem,
-    meta: YoutubeSearchMetaFields,
+    outcome: MetaFetchOutcome,
 ) -> YoutubeSearchItemWithMeta {
+    let MetaFetchOutcome {
+        fields: meta,
+        status: meta_status,
+    } = outcome;
     YoutubeSearchItemWithMeta {
         video_id: item.video_id,
         title: item.title,
@@ -170,6 +254,7 @@ fn merge_item_with_meta(
         like_count: meta.like_count,
         comment_count: meta.comment_count,
         availability: meta.availability,
+        meta_status,
     }
 }
 
@@ -255,15 +340,60 @@ fn parse_row(line: &str) -> Option<YoutubeSearchItem> {
 }
 
 fn normalize_upload_date(raw: &str) -> Option<String> {
-    if raw.is_empty() {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
         return None;
     }
 
-    if raw.len() == 8 && raw.chars().all(|ch| ch.is_ascii_digit()) {
-        return Some(format!("{}-{}-{}", &raw[0..4], &raw[4..6], &raw[6..8]));
+    if trimmed.eq_ignore_ascii_case("na") || trimmed.eq_ignore_ascii_case("null") {
+        return None;
     }
 
-    Some(raw.to_string())
+    if trimmed.len() == 8 && trimmed.chars().all(|ch| ch.is_ascii_digit()) {
+        return Some(format!(
+            "{}-{}-{}",
+            &trimmed[0..4],
+            &trimmed[4..6],
+            &trimmed[6..8]
+        ));
+    }
+
+    Some(trimmed.to_string())
+}
+
+fn meta_status_for_error(err: &PodcastCliError) -> MetaStatus {
+    match err {
+        PodcastCliError::Api(message) if message.to_ascii_lowercase().contains("timed out") => {
+            MetaStatus::Timeout
+        }
+        _ => MetaStatus::Failed,
+    }
+}
+
+fn summarize_meta_statuses(
+    searched: usize,
+    items: &[YoutubeSearchItemWithMeta],
+) -> YoutubeSearchEnvelopeMeta {
+    let mut meta_success = 0usize;
+    let mut meta_failed = 0usize;
+    let mut meta_timeout = 0usize;
+
+    for item in items {
+        match item.meta_status {
+            MetaStatus::Ok => meta_success += 1,
+            MetaStatus::Failed => meta_failed += 1,
+            MetaStatus::Timeout => meta_timeout += 1,
+            MetaStatus::Skipped => {}
+        }
+    }
+
+    YoutubeSearchEnvelopeMeta {
+        searched,
+        with_meta: true,
+        meta_success,
+        meta_failed,
+        meta_timeout,
+    }
 }
 
 impl YoutubeSearchMetaFields {
@@ -282,9 +412,13 @@ impl YoutubeSearchMetaFields {
 
 #[cfg(test)]
 mod tests {
+    use crate::error::PodcastCliError;
+
     use super::{
-        merge_item_with_meta, normalize_upload_date, parse_row, requested_fetch_limit,
-        YoutubeSearchItem, YoutubeSearchMetaFields,
+        merge_item_with_meta, meta_status_for_error, normalize_upload_date, parse_row,
+        requested_fetch_limit, summarize_meta_statuses, MetaFetchOutcome, MetaStatus,
+        YoutubeSearchEnvelopeMeta, YoutubeSearchItem, YoutubeSearchItemWithMeta,
+        YoutubeSearchMetaFields,
     };
 
     #[test]
@@ -316,6 +450,11 @@ mod tests {
     fn normalize_upload_date_keeps_non_standard_values() {
         assert_eq!(normalize_upload_date("unknown").as_deref(), Some("unknown"));
         assert_eq!(normalize_upload_date(""), None);
+        assert_eq!(normalize_upload_date("   "), None);
+        assert_eq!(normalize_upload_date("NA"), None);
+        assert_eq!(normalize_upload_date("na"), None);
+        assert_eq!(normalize_upload_date("null"), None);
+        assert_eq!(normalize_upload_date("NULL"), None);
     }
 
     #[test]
@@ -344,11 +483,16 @@ mod tests {
             comment_count: Some(10),
             availability: Some("public".to_string()),
         };
+        let outcome = MetaFetchOutcome {
+            fields: meta,
+            status: MetaStatus::Ok,
+        };
 
-        let merged = merge_item_with_meta(item, meta);
+        let merged = merge_item_with_meta(item, outcome);
         assert_eq!(merged.duration, Some(120));
         assert_eq!(merged.upload_date.as_deref(), Some("2026-03-01"));
         assert_eq!(merged.view_count, Some(1_000));
+        assert_eq!(merged.meta_status, MetaStatus::Ok);
     }
 
     #[test]
@@ -362,9 +506,99 @@ mod tests {
             url: "https://www.youtube.com/watch?v=abc123def45".to_string(),
         };
 
-        let merged = merge_item_with_meta(item, YoutubeSearchMetaFields::default());
+        let merged = merge_item_with_meta(item, MetaFetchOutcome::default());
         assert_eq!(merged.duration, Some(30));
         assert_eq!(merged.upload_date.as_deref(), Some("2020-01-01"));
         assert_eq!(merged.view_count, None);
+        assert_eq!(merged.meta_status, MetaStatus::Skipped);
+    }
+
+    #[test]
+    fn meta_status_for_error_marks_timeout_and_failed() {
+        let timeout = PodcastCliError::Api(
+            "yt-dlp metadata request timed out for video-id `abc123def45` after 5s".to_string(),
+        );
+        let failed = PodcastCliError::Api("yt-dlp failed for video-id `abc123def45`".to_string());
+
+        assert_eq!(meta_status_for_error(&timeout), MetaStatus::Timeout);
+        assert_eq!(meta_status_for_error(&failed), MetaStatus::Failed);
+        assert_eq!(
+            meta_status_for_error(&PodcastCliError::Io(std::io::Error::other("boom"))),
+            MetaStatus::Failed
+        );
+    }
+
+    #[test]
+    fn summarize_meta_statuses_counts_only_success_failed_timeout() {
+        let items = vec![
+            YoutubeSearchItemWithMeta {
+                video_id: "aaa111bbb22".to_string(),
+                title: "a".to_string(),
+                channel: "c".to_string(),
+                duration: None,
+                upload_date: None,
+                url: "https://www.youtube.com/watch?v=aaa111bbb22".to_string(),
+                timestamp: None,
+                view_count: None,
+                like_count: None,
+                comment_count: None,
+                availability: None,
+                meta_status: MetaStatus::Ok,
+            },
+            YoutubeSearchItemWithMeta {
+                video_id: "ccc333ddd44".to_string(),
+                title: "b".to_string(),
+                channel: "c".to_string(),
+                duration: None,
+                upload_date: None,
+                url: "https://www.youtube.com/watch?v=ccc333ddd44".to_string(),
+                timestamp: None,
+                view_count: None,
+                like_count: None,
+                comment_count: None,
+                availability: None,
+                meta_status: MetaStatus::Failed,
+            },
+            YoutubeSearchItemWithMeta {
+                video_id: "eee555fff66".to_string(),
+                title: "c".to_string(),
+                channel: "c".to_string(),
+                duration: None,
+                upload_date: None,
+                url: "https://www.youtube.com/watch?v=eee555fff66".to_string(),
+                timestamp: None,
+                view_count: None,
+                like_count: None,
+                comment_count: None,
+                availability: None,
+                meta_status: MetaStatus::Timeout,
+            },
+            YoutubeSearchItemWithMeta {
+                video_id: "ggg777hhh88".to_string(),
+                title: "d".to_string(),
+                channel: "c".to_string(),
+                duration: None,
+                upload_date: None,
+                url: "https://www.youtube.com/watch?v=ggg777hhh88".to_string(),
+                timestamp: None,
+                view_count: None,
+                like_count: None,
+                comment_count: None,
+                availability: None,
+                meta_status: MetaStatus::Skipped,
+            },
+        ];
+
+        let summary = summarize_meta_statuses(items.len(), &items);
+        assert_eq!(
+            summary,
+            YoutubeSearchEnvelopeMeta {
+                searched: 4,
+                with_meta: true,
+                meta_success: 1,
+                meta_failed: 1,
+                meta_timeout: 1,
+            }
+        );
     }
 }

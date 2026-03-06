@@ -111,13 +111,25 @@ pub struct EpisodeArgs {
 pub struct DownloadArgs {
     #[arg(value_name = "episode-id", value_parser = parse_episode_id)]
     pub episode_id: u64,
-    #[arg(long, value_name = "path", help = "Download destination file or directory")]
+    #[arg(
+        long,
+        value_name = "path",
+        help = "Download destination file or directory"
+    )]
     pub dest: Option<PathBuf>,
     #[arg(long, value_name = "name", help = "Override output filename")]
     pub filename: Option<String>,
-    #[arg(long, conflicts_with = "dry_run", help = "Replace existing target file")]
+    #[arg(
+        long,
+        conflicts_with = "dry_run",
+        help = "Replace existing target file"
+    )]
     pub overwrite: bool,
-    #[arg(long, conflicts_with = "dry_run", help = "Resume from existing .part file")]
+    #[arg(
+        long,
+        conflicts_with = "dry_run",
+        help = "Resume from existing .part file"
+    )]
     pub resume: bool,
     #[arg(
         long,
@@ -129,7 +141,11 @@ pub struct DownloadArgs {
     pub timeout: u64,
     #[arg(long, help = "Disable progress output")]
     pub no_progress: bool,
-    #[arg(long, conflicts_with = "no_progress", help = "Emit progress as JSON lines to stderr")]
+    #[arg(
+        long,
+        conflicts_with = "no_progress",
+        help = "Emit progress as JSON lines to stderr"
+    )]
     pub progress_json: bool,
     #[arg(
         long,
@@ -180,7 +196,12 @@ pub struct TranscribeArgs {
     pub episode_id: Option<u64>,
     #[arg(long, help = "Whisper model to use", default_value = "base")]
     pub model: String,
-    #[arg(long, value_name = "code", help = "Language code", default_value = "en")]
+    #[arg(
+        long,
+        value_name = "code",
+        help = "Language code",
+        default_value = "en"
+    )]
     pub language: String,
     #[arg(long, value_enum, default_value_t = TranscribeFormat::Text)]
     pub format: TranscribeFormat,
@@ -222,6 +243,8 @@ pub struct YoutubeSearchArgs {
     pub meta_concurrency: Option<u8>,
     #[arg(long, value_name = "seconds", value_parser = parse_meta_timeout, requires = "with_meta", help = "Timeout for metadata fetching in seconds (requires --with-meta)")]
     pub meta_timeout: Option<u64>,
+    #[arg(long, help = "Wrap output as JSON envelope {query,items,meta}")]
+    pub json_envelope: bool,
 }
 
 #[derive(Debug, Args)]
