@@ -85,6 +85,21 @@ fn parse_youtube_search_with_meta_options() {
 }
 
 #[test]
+fn parse_youtube_search_with_envelope_only() {
+    let cli = Cli::parse_from(["podcast", "youtube-search", "rust", "--json-envelope"]);
+
+    match cli.command {
+        Commands::YoutubeSearch(args) => {
+            assert!(!args.with_meta);
+            assert_eq!(args.meta_concurrency, None);
+            assert_eq!(args.meta_timeout, None);
+            assert!(args.json_envelope);
+        }
+        _ => panic!("expected youtube-search command"),
+    }
+}
+
+#[test]
 fn reject_invalid_meta_concurrency() {
     let err = Cli::try_parse_from([
         "podcast",
