@@ -350,7 +350,7 @@ fn srt_to_segments(srt: &str) -> Result<Vec<TranscriptSegment>> {
 fn parse_srt_time(time: &str) -> f64 {
     let time = time.trim();
     // Format: 00:00:00,000
-    let parts: Vec<&str> = time.split(|c| c == ':' || c == ',').collect();
+    let parts: Vec<&str> = time.split([':', ',']).collect();
     if parts.len() >= 3 {
         let hours: f64 = parts[0].parse().unwrap_or(0.0);
         let minutes: f64 = parts[1].parse().unwrap_or(0.0);

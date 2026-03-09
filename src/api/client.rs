@@ -6,7 +6,7 @@ use sha1::{Digest, Sha1};
 
 use crate::error::{PodcastCliError, Result};
 
-const DEFAULT_BASE_URL: &str = "https://api.podcastindex.org/api/1.0";
+const DEFAULT_BASE_URL: &str = "http://127.0.0.1:8080/api/1.0";
 const USER_AGENT_VALUE: &str = "podcast-cli/0.1";
 
 #[derive(Debug, Clone)]
