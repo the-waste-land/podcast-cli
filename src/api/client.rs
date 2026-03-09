@@ -26,7 +26,9 @@ fn build_http_client() -> reqwest::Client {
         }
     } else {
         // Try HTTPS_PROXY for HTTPS requests
-        if let Some(https_proxy) = get_env_proxy("HTTPS_PROXY").or_else(|| get_env_proxy("https_proxy")) {
+        if let Some(https_proxy) =
+            get_env_proxy("HTTPS_PROXY").or_else(|| get_env_proxy("https_proxy"))
+        {
             match Proxy::https(&https_proxy) {
                 Ok(proxy) => {
                     builder = builder.proxy(proxy);
@@ -37,7 +39,9 @@ fn build_http_client() -> reqwest::Client {
             }
         }
         // Try HTTP_PROXY for HTTP requests
-        if let Some(http_proxy) = get_env_proxy("HTTP_PROXY").or_else(|| get_env_proxy("http_proxy")) {
+        if let Some(http_proxy) =
+            get_env_proxy("HTTP_PROXY").or_else(|| get_env_proxy("http_proxy"))
+        {
             match Proxy::http(&http_proxy) {
                 Ok(proxy) => {
                     builder = builder.proxy(proxy);
@@ -52,7 +56,10 @@ fn build_http_client() -> reqwest::Client {
     match builder.build() {
         Ok(client) => client,
         Err(e) => {
-            eprintln!("Warning: failed to build HTTP client with proxy, falling back to default: {}", e);
+            eprintln!(
+                "Warning: failed to build HTTP client with proxy, falling back to default: {}",
+                e
+            );
             reqwest::Client::new()
         }
     }

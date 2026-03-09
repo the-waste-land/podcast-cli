@@ -106,11 +106,7 @@ pub async fn run(args: TranscribeArgs) -> Result<()> {
     Ok(())
 }
 
-fn try_faster_whisper(
-    audio_path: &Path,
-    model: &str,
-    language: &str,
-) -> Result<TranscribeResult> {
+fn try_faster_whisper(audio_path: &Path, model: &str, language: &str) -> Result<TranscribeResult> {
     // Check if faster-whisper is available
     let check = Command::new("python3")
         .arg("-c")
@@ -130,9 +126,7 @@ fn try_faster_whisper(
         .arg(audio_path)
         .arg(language)
         .output()
-        .map_err(|e| {
-            PodcastCliError::Validation(format!("failed to run faster-whisper: {}", e))
-        })?;
+        .map_err(|e| PodcastCliError::Validation(format!("failed to run faster-whisper: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -143,7 +137,7 @@ fn try_faster_whisper(
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    
+
     #[derive(Deserialize)]
     struct FasterWhisperResult {
         text: String,
@@ -206,9 +200,9 @@ fn run_whisper_cli(
         .arg(&temp_dir)
         .arg(audio_path);
 
-    let output = cmd.output().map_err(|e| {
-        PodcastCliError::Validation(format!("failed to run whisper: {}", e))
-    })?;
+    let output = cmd
+        .output()
+        .map_err(|e| PodcastCliError::Validation(format!("failed to run whisper: {}", e)))?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -219,11 +213,14 @@ fn run_whisper_cli(
     }
 
     // Read the output file
-    let output_file = temp_dir.join(format!("transcript.{}", match format {
-        crate::cli::TranscribeFormat::Json => "json",
-        crate::cli::TranscribeFormat::Text => "txt",
-        crate::cli::TranscribeFormat::Srt => "srt",
-    }));
+    let output_file = temp_dir.join(format!(
+        "transcript.{}",
+        match format {
+            crate::cli::TranscribeFormat::Json => "json",
+            crate::cli::TranscribeFormat::Text => "txt",
+            crate::cli::TranscribeFormat::Srt => "srt",
+        }
+    ));
 
     let content = std::fs::read_to_string(&output_file).map_err(PodcastCliError::Io)?;
 
@@ -274,7 +271,11 @@ fn run_whisper_cli(
         }),
         crate::cli::TranscribeFormat::Srt => {
             let segments = srt_to_segments(&content)?;
-            let text = segments.iter().map(|s| s.text.trim()).collect::<Vec<_>>().join(" ");
+            let text = segments
+                .iter()
+                .map(|s| s.text.trim())
+                .collect::<Vec<_>>()
+                .join(" ");
 
             Ok(TranscribeResult {
                 text,
@@ -350,7 +351,7 @@ fn srt_to_segments(srt: &str) -> Result<Vec<TranscriptSegment>> {
 fn parse_srt_time(time: &str) -> f64 {
     let time = time.trim();
     // Format: 00:00:00,000
-    let parts: Vec<&str> = time.split(|c| c == ':' || c == ',').collect();
+    let parts: Vec<&str> = time.split([':', ',']).collect();
     if parts.len() >= 3 {
         let hours: f64 = parts[0].parse().unwrap_or(0.0);
         let minutes: f64 = parts[1].parse().unwrap_or(0.0);

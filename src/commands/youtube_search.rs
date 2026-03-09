@@ -123,24 +123,22 @@ pub async fn run(args: YoutubeSearchArgs) -> Result<()> {
         } else {
             println!("{}", to_pretty_json(&enriched)?);
         }
+    } else if args.json_envelope {
+        let searched = items.len();
+        let envelope = YoutubeSearchEnvelope {
+            query: args.query,
+            meta: YoutubeSearchEnvelopeMeta {
+                searched,
+                with_meta: false,
+                meta_success: 0,
+                meta_failed: 0,
+                meta_timeout: 0,
+            },
+            items,
+        };
+        println!("{}", to_pretty_json(&envelope)?);
     } else {
-        if args.json_envelope {
-            let searched = items.len();
-            let envelope = YoutubeSearchEnvelope {
-                query: args.query,
-                meta: YoutubeSearchEnvelopeMeta {
-                    searched,
-                    with_meta: false,
-                    meta_success: 0,
-                    meta_failed: 0,
-                    meta_timeout: 0,
-                },
-                items,
-            };
-            println!("{}", to_pretty_json(&envelope)?);
-        } else {
-            println!("{}", to_pretty_json(&items)?);
-        }
+        println!("{}", to_pretty_json(&items)?);
     }
 
     Ok(())

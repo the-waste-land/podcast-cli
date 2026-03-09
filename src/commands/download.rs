@@ -679,7 +679,7 @@ fn content_type_to_extension(raw: &str) -> Option<String> {
 fn derive_filename(episode: &Episode, episode_id: u64, url: &Url, extension: &str) -> String {
     let from_url = url
         .path_segments()
-        .and_then(|segments| segments.filter(|value| !value.is_empty()).next_back())
+        .and_then(|mut segments| segments.rfind(|value| !value.is_empty()))
         .map(sanitize_filename)
         .filter(|value| !value.is_empty());
 
