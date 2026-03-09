@@ -1,5 +1,7 @@
 # podcast-cli
 
+[English](README.md) | [中文](README_zh.md)
+
 Rust CLI for [Podcast Index API](https://podcastindex-org.github.io/docs-api/), supporting:
 
 - `table` output for human reading
