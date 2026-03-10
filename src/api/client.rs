@@ -5,7 +5,7 @@ use reqwest::Proxy;
 use serde::de::DeserializeOwned;
 use sha1::{Digest, Sha1};
 
-use crate::error::{PodcastCliError, Result};
+use crate::error::{ApiContext, PodcastCliError, Result};
 
 const DEFAULT_BASE_URL: &str = "https://api.podcastindex.org/api/1.0";
 const USER_AGENT_VALUE: &str = "podcast-cli/0.1";
@@ -127,7 +127,7 @@ impl PodcastIndexClient {
     fn auth_headers(&self) -> Result<HeaderMap> {
         let timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|err| PodcastCliError::Api(format!("invalid system time: {err}")))?
+            .api_context("invalid system time")?
             .as_secs()
             .to_string();
 
@@ -139,18 +139,15 @@ impl PodcastIndexClient {
         let mut headers = HeaderMap::new();
         headers.insert(
             "X-Auth-Date",
-            HeaderValue::from_str(&timestamp)
-                .map_err(|err| PodcastCliError::Api(format!("invalid auth date: {err}")))?,
+            HeaderValue::from_str(&timestamp).api_context("invalid auth date")?,
         );
         headers.insert(
             "X-Auth-Key",
-            HeaderValue::from_str(&self.api_key)
-                .map_err(|err| PodcastCliError::Api(format!("invalid api key: {err}")))?,
+            HeaderValue::from_str(&self.api_key).api_context("invalid api key")?,
         );
         headers.insert(
             "Authorization",
-            HeaderValue::from_str(&digest)
-                .map_err(|err| PodcastCliError::Api(format!("invalid auth token: {err}")))?,
+            HeaderValue::from_str(&digest).api_context("invalid auth token")?,
         );
         headers.insert(USER_AGENT, HeaderValue::from_static(USER_AGENT_VALUE));
 

@@ -48,6 +48,32 @@ impl PodcastCliError {
 
 pub type Result<T> = std::result::Result<T, PodcastCliError>;
 
+pub trait ApiContext<T> {
+    fn api_context(self, context: &str) -> Result<T>;
+}
+
+impl<T, E> ApiContext<T> for std::result::Result<T, E>
+where
+    E: std::fmt::Display,
+{
+    fn api_context(self, context: &str) -> Result<T> {
+        self.map_err(|err| PodcastCliError::Api(format!("{context}: {err}")))
+    }
+}
+
+pub trait ConfigContext<T> {
+    fn config_context(self, context: &str) -> Result<T>;
+}
+
+impl<T, E> ConfigContext<T> for std::result::Result<T, E>
+where
+    E: std::fmt::Display,
+{
+    fn config_context(self, context: &str) -> Result<T> {
+        self.map_err(|err| PodcastCliError::Config(format!("{context}: {err}")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::PodcastCliError;
