@@ -86,26 +86,39 @@ pub async fn run(args: TranscribeArgs) -> Result<()> {
         }
     };
 
-    // Handle output based on format
-    match args.format {
-        crate::cli::TranscribeFormat::Json => {
-            let json = serde_json::to_string_pretty(&result).map_err(|e| {
-                PodcastCliError::Validation(format!("failed to serialize result: {}", e))
-            })?;
-            println!("{}", json);
-        }
-        crate::cli::TranscribeFormat::Text => {
-            println!("{}", result.text);
-        }
-        crate::cli::TranscribeFormat::Srt => {
-            let srt = segments_to_srt(&result.segments);
-            println!("{}", srt);
-        }
+    if let Some(stdout) = route_transcribe_output(&result, &args.format, args.output.as_deref())? {
+        println!("{}", stdout);
     }
 
     Ok(())
 }
 
+fn route_transcribe_output(
+    result: &TranscribeResult,
+    format: &crate::cli::TranscribeFormat,
+    output_path: Option<&Path>,
+) -> Result<Option<String>> {
+    let rendered = render_transcribe_output(result, format)?;
+
+    if let Some(path) = output_path {
+        std::fs::write(path, rendered).map_err(PodcastCliError::Io)?;
+        Ok(None)
+    } else {
+        Ok(Some(rendered))
+    }
+}
+
+fn render_transcribe_output(
+    result: &TranscribeResult,
+    format: &crate::cli::TranscribeFormat,
+) -> Result<String> {
+    match format {
+        crate::cli::TranscribeFormat::Json => serde_json::to_string_pretty(result)
+            .map_err(|e| PodcastCliError::Validation(format!("failed to serialize result: {}", e))),
+        crate::cli::TranscribeFormat::Text => Ok(result.text.clone()),
+        crate::cli::TranscribeFormat::Srt => Ok(segments_to_srt(&result.segments)),
+    }
+}
 fn try_faster_whisper(audio_path: &Path, model: &str, language: &str) -> Result<TranscribeResult> {
     // Check if faster-whisper is available
     let check = Command::new("python3")
@@ -385,4 +398,59 @@ fn format_srt_time(seconds: f64) -> String {
     let millis = ((seconds % 1.0) * 1000.0).round() as u64;
 
     format!("{:02}:{:02}:{:02},{:03}", hours, minutes, secs, millis)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::tempdir;
+
+    use super::{route_transcribe_output, TranscribeResult, TranscriptSegment};
+    use crate::cli::TranscribeFormat;
+
+    fn sample_result() -> TranscribeResult {
+        TranscribeResult {
+            text: "hello world".to_string(),
+            segments: vec![TranscriptSegment {
+                id: 1,
+                start: 0.0,
+                end: 1.5,
+                text: "hello world".to_string(),
+            }],
+            language: "en".to_string(),
+            model: "base".to_string(),
+            duration: 1.5,
+        }
+    }
+
+    #[test]
+    fn transcribe_writes_output_file_instead_of_stdout() {
+        let temp_dir = tempdir().expect("temp dir");
+        let output_path = temp_dir.path().join("transcript.txt");
+
+        let stdout = route_transcribe_output(
+            &sample_result(),
+            &TranscribeFormat::Text,
+            Some(output_path.as_path()),
+        )
+        .expect("route output");
+
+        assert!(
+            stdout.is_none(),
+            "stdout should be suppressed when writing to file"
+        );
+        assert_eq!(
+            fs::read_to_string(&output_path).expect("transcript file"),
+            "hello world"
+        );
+    }
+
+    #[test]
+    fn transcribe_returns_stdout_when_output_path_is_not_set() {
+        let stdout = route_transcribe_output(&sample_result(), &TranscribeFormat::Text, None)
+            .expect("route output");
+
+        assert_eq!(stdout.as_deref(), Some("hello world"));
+    }
 }
