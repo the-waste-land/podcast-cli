@@ -1,0 +1,7 @@
+127.0.0.1 - - [05/Mar/2026 02:24:39] "GET /api/1.0/search/byterm HTTP/1.1" 200 -
+127.0.0.1 - - [05/Mar/2026 02:27:46] "GET /api/1.0/search/byterm?q=Sam+Altman&max=10 HTTP/1.1" 200 -
+127.0.0.1 - - [05/Mar/2026 02:28:18] "GET /api/1.0/episodes/byid?id=12345 HTTP/1.1" 200 -
+127.0.0.1 - - [05/Mar/2026 02:28:18] code 501, message Unsupported method ('HEAD')
+127.0.0.1 - - [05/Mar/2026 02:28:18] "HEAD /audio.wav HTTP/1.1" 501 -
+127.0.0.1 - - [05/Mar/2026 02:28:18] "GET /audio.wav HTTP/1.1" 200 -
+127.0.0.1 - - [05/Mar/2026 02:28:18] "GET /audio.wav HTTP/1.1" 200 -
