@@ -2,7 +2,7 @@ use std::fs;
 use std::path::PathBuf;
 
 use crate::config::AppConfig;
-use crate::error::{PodcastCliError, Result};
+use crate::error::{ConfigContext, Result};
 
 const APP_NAME: &str = "podcast-cli";
 const CONFIG_NAME: &str = "default";
@@ -39,12 +39,10 @@ impl ConfigManager {
                 return Ok(AppConfig::default());
             }
 
-            return confy::load_path(path)
-                .map_err(|err| PodcastCliError::Config(format!("failed to load config: {err}")));
+            return confy::load_path(path).config_context("failed to load config");
         }
 
-        confy::load(APP_NAME, Some(CONFIG_NAME))
-            .map_err(|err| PodcastCliError::Config(format!("failed to load config: {err}")))
+        confy::load(APP_NAME, Some(CONFIG_NAME)).config_context("failed to load config")
     }
 
     pub fn save(&self, cfg: &AppConfig) -> Result<()> {
@@ -53,21 +51,18 @@ impl ConfigManager {
                 fs::create_dir_all(parent)?;
             }
 
-            return confy::store_path(path, cfg)
-                .map_err(|err| PodcastCliError::Config(format!("failed to save config: {err}")));
+            return confy::store_path(path, cfg).config_context("failed to save config");
         }
 
-        confy::store(APP_NAME, Some(CONFIG_NAME), cfg)
-            .map_err(|err| PodcastCliError::Config(format!("failed to save config: {err}")))
+        confy::store(APP_NAME, Some(CONFIG_NAME), cfg).config_context("failed to save config")
     }
 
     pub fn clear(&self) -> Result<()> {
         let path = if let Some(path) = &self.path_override {
             path.clone()
         } else {
-            confy::get_configuration_file_path(APP_NAME, Some(CONFIG_NAME)).map_err(|err| {
-                PodcastCliError::Config(format!("failed to resolve config path: {err}"))
-            })?
+            confy::get_configuration_file_path(APP_NAME, Some(CONFIG_NAME))
+                .config_context("failed to resolve config path")?
         };
 
         if path.exists() {
